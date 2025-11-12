@@ -1,0 +1,15 @@
+# Deploy to Render using the Dockerfile for custom dependency installation (Lua)
+services:
+  - type: web
+    name: NovaHub
+    # Use the Dockerfile in the root of the repo
+    rootDir: ./
+    # Tells Render to use the Dockerfile for the build
+    dockerfilePath: Dockerfile
+    # Command to start the application (defined in package.json)
+    command: npm start
+    env: node
+    # Port to expose (must match EXPOSE in Dockerfile)
+    envVars:
+      - key: PORT
+        value: "3000"
