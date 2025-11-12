@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 
 // Define the watermark constant
 // MODIFIED: Adding a single space at the end to clearly separate it from the code payload.
-const WATERMARK = "--[[ v0.01 Pardox Lua Obfuscator ]] "; 
+const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] "; 
 
 // Middleware to parse incoming JSON and serve static files
 app.use(bodyParser.json());
