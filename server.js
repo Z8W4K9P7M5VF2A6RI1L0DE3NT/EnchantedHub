@@ -12,7 +12,6 @@ const app = express();
 const port = process.env.PORT || 3000; 
 
 // --- Database Connection Pool ---
-// Uses the DATABASE_URL environment variable provided by Render
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
@@ -25,7 +24,6 @@ pool.connect((err, client, done) => {
     }
     console.log('Successfully connected to PostgreSQL.');
     
-    // Creates the 'scripts' table if it doesn't exist
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS scripts (
             key VARCHAR(32) PRIMARY KEY,
@@ -42,15 +40,16 @@ pool.connect((err, client, done) => {
         }
     });
 });
-// --------------------------------------------------------------------
+// --------------------------------
 
 // Define the watermark constant
 const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] "; 
 
 // Middleware
 app.use(bodyParser.json());
+// Serve static files from the 'public' directory (where your HTML should be)
 app.use(express.static('public')); 
-app.use(cors()); // Enable CORS for frontend interaction
+app.use(cors());
 
 // --- Helper Functions ---
 const generateUniqueId = () => {
@@ -59,7 +58,7 @@ const generateUniqueId = () => {
 
 
 // =======================================================
-// === 1. OBFUSCATION ENDPOINT (Receives raw code) ===
+// === 1. OBFUSCATION ENDPOINT (Requires Prometheus CLI) ===
 // =======================================================
 
 app.post('/obfuscate', (req, res) => {
@@ -72,7 +71,7 @@ app.post('/obfuscate', (req, res) => {
     
     fs.writeFileSync(tempFile, luaCode, 'utf8');
 
-    // NOTE: This assumes Prometheus CLI is set up in 'src/cli.lua'
+    // NOTE: This assumes Prometheus CLI is set up in src/cli.lua
     const command = `lua src/cli.lua --preset ${preset} --out ${outputFile} ${tempFile}`;
     
     exec(command, (error, stdout, stderr) => {
@@ -84,17 +83,16 @@ app.post('/obfuscate', (req, res) => {
             
             return res.status(500).json({ 
                 error: 'Obfuscation failed.', 
-                details: stderr || 'Unknown execution error.' 
+                details: stderr || error.message 
             });
         }
         
         try {
             let obfuscatedCode = fs.readFileSync(outputFile, 'utf8');
             
-            // Apply Watermark
+            // Prepend the watermark
             obfuscatedCode = WATERMARK + obfuscatedCode;
             
-            // Send obfuscated code back to the frontend for storage
             res.json({ obfuscatedCode: obfuscatedCode });
             fs.unlinkSync(outputFile);
         } catch (readError) {
@@ -108,7 +106,7 @@ app.post('/obfuscate', (req, res) => {
 // === 2. STORAGE API ENDPOINTS (PostgreSQL Storage)===
 // ====================================================
 
-// POST /store (Receives final obfuscated script from frontend and saves it)
+// POST /store (Stores the final, executable Lua script)
 app.post('/store', async (req, res) => {
     const { script } = req.body;
 
@@ -124,7 +122,6 @@ app.post('/store', async (req, res) => {
             [scriptKey, script]
         );
 
-        // Success: Return the unique key used to retrieve the script
         res.status(201).json({ 
             message: 'Script stored successfully.',
             key: scriptKey
@@ -136,12 +133,12 @@ app.post('/store', async (req, res) => {
     }
 });
 
-// GET /retrieve/:key (Serves the stored script ONLY to Roblox)
+// GET /retrieve/:key (Retrieves the Lua script - Roblox only)
 app.get('/retrieve/:key', async (req, res) => {
     const scriptKey = req.params.key;
     const userAgent = req.headers['user-agent'];
 
-    // CRITICAL: Validate User-Agent (Blocks web browsers)
+    // 1. Validate User-Agent 
     if (!userAgent || !userAgent.includes('Roblox')) {
         res.setHeader('Content-Type', 'text/plain');
         return res.status(403).send('😬 -- Access Denied. Must use Roblox execution environment.');
@@ -160,7 +157,7 @@ app.get('/retrieve/:key', async (req, res) => {
 
         const script = result.rows[0].script;
 
-        // Deliver the script as raw text
+        // 2. Deliver the script
         res.setHeader('Content-Type', 'text/plain');
         res.status(200).send(script);
         
@@ -172,7 +169,7 @@ app.get('/retrieve/:key', async (req, res) => {
 });
 
 
-// Basic Health Check
+// Basic Health Check (for Render's monitoring)
 app.get('/', (req, res) => {
     res.send('NovaHub Unified Backend is running and connected to PostgreSQL.');
 });
