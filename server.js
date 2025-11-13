@@ -48,6 +48,7 @@ pool.connect((err, client, done) => {
 
 // Define the watermark constant
 const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] "; 
+const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw script. Check your Lua syntax. ]] ";
 
 // Middleware for static files and CORS
 app.use(express.static('public')); 
@@ -58,13 +59,18 @@ const generateUniqueId = () => {
     return crypto.randomBytes(16).toString('hex');
 };
 
+// --- Fallback Obfuscation Function ---
+// Wraps the raw code in a message block so the service doesn't outright fail.
+const applyFallback = (rawCode) => {
+    return `${FALLBACK_WATERMARK}\n${rawCode}`;
+};
+
 
 // =======================================================
 // === 1. OBFUSCATE ROUTE (Returns Raw Code) ===========
 // =======================================================
-// This route is for the main Obfuscator UI to get raw output.
 app.post('/obfuscate', async (req, res) => {
-    const rawLuaCode = req.body.code; // Note: Frontend sends 'code'
+    const rawLuaCode = req.body.code;
     const preset = 'Medium';
     const timestamp = Date.now();
     
@@ -72,49 +78,54 @@ app.post('/obfuscate', async (req, res) => {
     const outputFile = path.join(__dirname, `obf_${timestamp}.lua`);
     
     let obfuscatedCode = '';
+    let obfuscationSucceeded = false;
 
     // Step 1: Execute Obfuscator
     try {
         fs.writeFileSync(tempFile, rawLuaCode, 'utf8');
 
-        // Command to run Prometheus
         const command = `lua src/cli.lua --preset ${preset} --out ${outputFile} ${tempFile}`;
         
-        // Execute CLI synchronously
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve) => { // No need to reject here, we handle failure internally
             exec(command, (error, stdout, stderr) => {
                 // Clean up the temporary input file immediately
                 fs.unlinkSync(tempFile); 
                 
                 if (error || stderr) {
-                    // If Prometheus fails (e.g., syntax error), reject
                     console.error(`Prometheus Execution Failed: ${error ? error.message : stderr}`);
                     if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
-                    return reject({ error: 'Obfuscation execution error.', details: stderr || error.message });
+                    
+                    // --- FALLBACK LOGIC ---
+                    obfuscatedCode = applyFallback(rawLuaCode);
+                    obfuscationSucceeded = false;
+                    resolve();
+                    return;
                 }
                 
-                // Read the obfuscated result
+                // Success path
                 obfuscatedCode = fs.readFileSync(outputFile, 'utf8');
-                
-                // Apply Watermark
                 obfuscatedCode = WATERMARK + obfuscatedCode;
-                
-                // Clean up output file
                 fs.unlinkSync(outputFile);
+                obfuscationSucceeded = true;
                 resolve();
             });
         });
         
     } catch (error) {
-        // Handle errors during execution or file read
-        if (typeof error === 'object' && error.error) {
-            return res.status(500).json(error); // Return structured error from CLI rejection
-        }
-        console.error('Filesystem or Execution Error:', error);
-        return res.status(500).json({ error: 'Internal execution error.', details: error.message });
+        // Handle errors during execution or file read (e.g. filesystem issues)
+        console.error('Filesystem or Internal Execution Error:', error);
+        
+        // --- SECONDARY FALLBACK (for catastrophic errors) ---
+        obfuscatedCode = applyFallback(rawLuaCode);
+        obfuscationSucceeded = false;
     }
 
-    // Step 2: Return Raw Obfuscated Code (NO STORAGE)
+    // Step 2: Return Result
+    if (!obfuscationSucceeded) {
+        // Log that a fallback was used
+        console.warn("Obfuscation failed, returning raw code with a warning.");
+    }
+    
     res.status(200).json({ 
         obfuscatedCode: obfuscatedCode
     });
@@ -124,9 +135,8 @@ app.post('/obfuscate', async (req, res) => {
 // =======================================================
 // === 2. OBFUSCATE-AND-STORE ROUTE (Returns Loader Key) ===
 // =======================================================
-// This route is used by the API Locker to get the secure key.
 app.post('/obfuscate-and-store', async (req, res) => {
-    const rawLuaCode = req.body.script; // Note: Frontend sends 'script'
+    const rawLuaCode = req.body.script;
     const preset = 'Medium'; 
     const timestamp = Date.now();
     
@@ -134,6 +144,7 @@ app.post('/obfuscate-and-store', async (req, res) => {
     const outputFile = path.join(__dirname, `obf_${timestamp}.lua`);
     
     let obfuscatedCode = '';
+    let obfuscationSucceeded = false;
 
     // Step 1: Execute Obfuscator
     try {
@@ -141,43 +152,54 @@ app.post('/obfuscate-and-store', async (req, res) => {
 
         const command = `lua src/cli.lua --preset ${preset} --out ${outputFile} ${tempFile}`;
         
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve) => { // No need to reject here, we handle failure internally
             exec(command, (error, stdout, stderr) => {
                 fs.unlinkSync(tempFile); 
                 
                 if (error || stderr) {
                     console.error(`Prometheus Execution Failed: ${error ? error.message : stderr}`);
                     if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
-                    return reject({ error: 'Obfuscation execution error.', details: stderr || error.message });
+                    
+                    // --- FALLBACK LOGIC ---
+                    obfuscatedCode = applyFallback(rawLuaCode);
+                    obfuscationSucceeded = false;
+                    resolve();
+                    return;
                 }
                 
+                // Success path
                 obfuscatedCode = fs.readFileSync(outputFile, 'utf8');
                 obfuscatedCode = WATERMARK + obfuscatedCode;
                 fs.unlinkSync(outputFile);
+                obfuscationSucceeded = true;
                 resolve();
             });
         });
         
     } catch (error) {
-        if (typeof error === 'object' && error.error) {
-            return res.status(500).json(error);
-        }
-        console.error('Filesystem or Execution Error:', error);
-        return res.status(500).json({ error: 'Internal execution error.', details: error.message });
+        console.error('Filesystem or Internal Execution Error:', error);
+        
+        // --- SECONDARY FALLBACK (for catastrophic errors) ---
+        obfuscatedCode = applyFallback(rawLuaCode);
+        obfuscationSucceeded = false;
     }
 
-    // Step 2: Store Obfuscated Code to PostgreSQL
+    // Step 2: Store Code to PostgreSQL
     const scriptKey = generateUniqueId();
     
     try {
         await pool.query(
             'INSERT INTO scripts(key, script) VALUES($1, $2)',
-            [scriptKey, obfuscatedCode] // Store the watermarked, obfuscated code
+            [scriptKey, obfuscatedCode] // Store the code (either obfuscated or fallback)
         );
 
         // Success: Return the key to the frontend
+        if (!obfuscationSucceeded) {
+            console.warn("Obfuscation failed, but the raw code with a warning was stored and a key returned.");
+        }
+        
         res.status(201).json({ 
-            message: 'Obfuscation and storage complete.',
+            message: obfuscationSucceeded ? 'Obfuscation and storage complete.' : 'Storage complete, but obfuscation failed. Check script for warning.',
             key: scriptKey
         });
 
@@ -216,7 +238,7 @@ app.get('/retrieve/:key', async (req, res) => {
 
         const script = result.rows[0].script;
 
-        // 2. Deliver the stored script (which is already obfuscated and watermarked)
+        // 2. Deliver the stored script
         res.setHeader('Content-Type', 'text/plain');
         res.status(200).send(script);
         
