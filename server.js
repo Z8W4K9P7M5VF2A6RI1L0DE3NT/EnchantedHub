@@ -62,12 +62,12 @@ const generateUniqueId = () => {
 
 
 // =======================================================
-// === OBFUSCATE-AND-STORE ROUTE (Unified Workflow) ===
+// === OBFUSCATE-ONLY ROUTE (New Obfuscator Frontend) ===
 // =======================================================
-
-app.post('/obfuscate-and-store', async (req, res) => {
-    const rawLuaCode = req.body.script;
-    const preset = 'Medium'; // Preset is hardcoded as per earlier decisions
+// This route returns the raw obfuscated code to the client.
+app.post('/obfuscate-only', async (req, res) => {
+    const rawLuaCode = req.body.code; // Note: Frontend sends 'code' for this route
+    const preset = 'Medium';
     const timestamp = Date.now();
     
     const tempFile = path.join(__dirname, `temp_${timestamp}.lua`);
@@ -116,13 +116,65 @@ app.post('/obfuscate-and-store', async (req, res) => {
         return res.status(500).json({ error: 'Internal execution error.', details: error.message });
     }
 
+    // Step 2: Return Raw Obfuscated Code (NO STORAGE)
+    res.status(200).json({ 
+        obfuscatedCode: obfuscatedCode
+    });
+});
+
+
+// =======================================================
+// === OBFUSCATE-AND-STORE ROUTE (Original Unified Flow) ===
+// =======================================================
+// This route is used by the API Locker and older frontends.
+app.post('/obfuscate-and-store', async (req, res) => {
+    const rawLuaCode = req.body.script; // Note: Frontend sends 'script' for this route
+    const preset = 'Medium'; 
+    const timestamp = Date.now();
+    
+    const tempFile = path.join(__dirname, `temp_${timestamp}.lua`);
+    const outputFile = path.join(__dirname, `obf_${timestamp}.lua`);
+    
+    let obfuscatedCode = '';
+
+    // Step 1: Execute Obfuscator
+    try {
+        fs.writeFileSync(tempFile, rawLuaCode, 'utf8');
+
+        const command = `lua src/cli.lua --preset ${preset} --out ${outputFile} ${tempFile}`;
+        
+        await new Promise((resolve, reject) => {
+            exec(command, (error, stdout, stderr) => {
+                fs.unlinkSync(tempFile); 
+                
+                if (error || stderr) {
+                    console.error(`Prometheus Execution Failed: ${error ? error.message : stderr}`);
+                    if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+                    return reject({ error: 'Obfuscation execution error.', details: stderr || error.message });
+                }
+                
+                obfuscatedCode = fs.readFileSync(outputFile, 'utf8');
+                obfuscatedCode = WATERMARK + obfuscatedCode;
+                fs.unlinkSync(outputFile);
+                resolve();
+            });
+        });
+        
+    } catch (error) {
+        if (typeof error === 'object' && error.error) {
+            return res.status(500).json(error);
+        }
+        console.error('Filesystem or Execution Error:', error);
+        return res.status(500).json({ error: 'Internal execution error.', details: error.message });
+    }
+
     // Step 2: Store Obfuscated Code to PostgreSQL
     const scriptKey = generateUniqueId();
     
     try {
         await pool.query(
             'INSERT INTO scripts(key, script) VALUES($1, $2)',
-            [scriptKey, obfuscatedCode] // Store the watermarked, obfuscated code
+            [scriptKey, obfuscatedCode]
         );
 
         // Success: Return the key to the frontend
@@ -150,7 +202,7 @@ app.get('/retrieve/:key', async (req, res) => {
     // 1. Validate User-Agent (ROBLOX SECURITY CHECK)
     if (!userAgent || !userAgent.includes('Roblox')) {
         res.setHeader('Content-Type', 'text/plain');
-        return res.status(403).send(' -- Access Denied.');
+        return res.status(403).send('-- Access Denied.');
     }
 
     try {
@@ -166,7 +218,7 @@ app.get('/retrieve/:key', async (req, res) => {
 
         const script = result.rows[0].script;
 
-        // 2. Deliver the stored script (which is already obfuscated and watermarked)
+        // 2. Deliver the stored script 
         res.setHeader('Content-Type', 'text/plain');
         res.status(200).send(script);
         
