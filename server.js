@@ -11,7 +11,7 @@ const app = express();
 const port = process.env.PORT || 3000; 
 
 // --- CONFIGURATION ---
-const MAX_LAYERS = 10; // Updated from 20 to 25
+const MAX_LAYERS = 3; // Updated from 20 to 25
 // ---------------------
 
 // --- CRITICAL: INCREASED PAYLOAD LIMIT TO 100MB ---
