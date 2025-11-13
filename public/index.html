@@ -268,16 +268,17 @@
             }
 
             const randomHex = (Math.random() * 0xFFFFFF << 0).toString(16).toUpperCase().padStart(6, '0');
-            const filename = `novahub_obf_${randomHex}.lua`; 
+            const filename = \`novahub_obf_\${randomHex}.lua\`; 
 
             const element = document.createElement('a');
             element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
             element.setAttribute('download', filename);
+            element.style.display = 'none';
             document.body.appendChild(element);
             element.click();
             document.body.removeChild(element);
             
-            setStatus(`Downloaded ${filename}!`, false);
+            setStatus(\`Downloaded \${filename}!\`, false);
         }
         
         function uploadCode(event) {
@@ -288,17 +289,17 @@
 
             const validTypes = ['text/plain', 'application/x-lua', ''];
             if (!validTypes.includes(file.type) && !file.name.endsWith('.lua') && !file.name.endsWith('.txt')) {
-                setStatus(`Unsupported file type: ${file.name}. Please upload a .lua or .txt file.`, true);
+                setStatus(\`Unsupported file type: \${file.name}. Please upload a .lua or .txt file.\`, true);
                 return;
             }
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 document.getElementById('lua-input').value = e.target.result;
-                setStatus(`Successfully loaded ${file.name}. Ready to obfuscate.`, false);
+                setStatus(\`Successfully loaded \${file.name}. Ready to obfuscate.\`, false);
             };
             reader.onerror = function() {
-                setStatus(`Error reading file: ${file.name}.`, true);
+                setStatus(\`Error reading file: \${file.name}.\`, true);
             };
             reader.readAsText(file);
         }
@@ -316,41 +317,33 @@
 
             button.disabled = true;
             button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
-            setStatus(`Obfuscating using the '${preset}' preset... This may take a few seconds.`, false);
+            setStatus(\`Obfuscating using the '\${preset}' preset...\`, false);
             output.value = '';
 
             try {
-                // *** FIX: Changed endpoint to /obfuscate-and-store ***
-                const response = await fetch('/obfuscate-and-store', {
+                // *** FIX: Changed endpoint to /obfuscate-only ***
+                const response = await fetch('/obfuscate-only', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script: input }), 
+                    body: JSON.stringify({ code: input, preset: preset }), 
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    // This route returns the final loader key, not the code itself.
-                    if (data.key) {
-                        const fullRetrievalUrl = `${window.location.origin}/retrieve/${data.key}`;
-                        const loaderScript = `loadstring(game:HttpGet('${fullRetrievalUrl}'))()`;
-                        
-                        setStatus('Obfuscation and Storage Complete! Loader Key Generated.', false);
-                        output.value = loaderScript;
-                    } else {
-                         setStatus('Obfuscation Failed: Server did not return a secure key.', true);
-                         output.value = data.error || 'Check server logs for detailed error.';
-                    }
+                    // This route returns the final raw obfuscated source code
+                    setStatus('Obfuscation Complete!', false);
+                    output.value = data.obfuscatedCode;
                 } else {
                     const errorMsg = data.error || 'Obfuscation Failed';
                     const details = data.details || 'Unknown server error.';
                     
-                    setStatus(`ERROR: ${errorMsg}. Check output for details.`, true);
-                    output.value = `--- Execution Error ---\n${details}`;
+                    setStatus(\`ERROR: \${errorMsg}. Check output for details.\`, true);
+                    output.value = \`--- Execution Error ---\\n\${details}\`;
                     console.error('Server Error:', details);
                 }
             } catch (error) {
-                setStatus(`An unexpected network error occurred. (Connection to backend failed)`, true);
+                setStatus(\`An unexpected network error occurred. (Connection to backend failed)\`, true);
                 console.error('Fetch error:', error);
             } finally {
                 button.disabled = false;
