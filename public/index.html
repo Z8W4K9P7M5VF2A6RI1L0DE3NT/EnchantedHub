@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaHub Lua Obfuscator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --purple-dark: #0f001f;
+            --purple-bg: #1e0037;
+            --purple-medium: #3a006b;
+            --purple-accent: #A55EEA;
+            --purple-light: #C3B1E1;
+            --purple-glow: #a55eea70;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Space Grotesk', sans-serif;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+        }
+        
+        body {
+            background: radial-gradient(circle at top left, var(--purple-dark) 0%, #000000 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><filter id="f1"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" result="t1"/><feColorMatrix in="t1" type="saturate" values="0.2"/></filter></defs><rect width="100%" height="100%" fill="none"/><rect width="100%" height="100%" filter="url(%23f1)" opacity="0.05"/></svg>') repeat;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.8;
+        }
+
+        .card-bg {
+            background: var(--purple-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(var(--purple-accent), 0.3); 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px var(--purple-glow);
+        }
+
+        .glow {
+            text-shadow: 0 0 10px var(--purple-accent);
+        }
+        .card-glow-inner {
+            box-shadow: inset 0 0 8px rgba(var(--purple-accent), 0.2);
+        }
+        
+        textarea {
+            resize: none;
+            font-family: monospace;
+            min-height: 250px;
+            background-color: var(--purple-dark);
+            color: #E0E0E0;
+            border: 1px solid rgba(var(--purple-accent), 0.4);
+        }
+        textarea:focus {
+             border-color: var(--purple-accent) !important;
+             box-shadow: 0 0 15px var(--purple-glow) !important;
+        }
+        
+        .btn-base {
+            padding: 0.75rem 1.75rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--purple-accent) 0%, var(--purple-medium) 100%);
+            border: 1px solid var(--purple-accent);
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px var(--purple-glow);
+        }
+        .btn-primary:disabled {
+            background: #40444b;
+            color: #b9bbbe;
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--purple-accent);
+            color: var(--purple-light);
+        }
+        .btn-secondary:hover {
+            background: rgba(var(--purple-accent), 0.2);
+            border-color: var(--purple-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-discord {
+            background: #7289da;
+        }
+        .btn-discord:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(114, 137, 218, 0.5);
+        }
+
+
+        #file-upload { display: none; }
+        .logo-container {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 3px solid var(--purple-accent);
+            margin-right: 16px;
+            box-shadow: 0 0 15px var(--purple-glow);
+            transform: rotate(-5deg);
+        }
+        .logo-container:hover {
+            transform: rotate(0deg) scale(1.05);
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--purple-accent), transparent);
+            margin: 40px 0;
+            opacity: 0.7;
+        }
+
+        .text-purple-light {
+            color: var(--purple-light);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4">
+    <div class="container w-full max-w-4xl card-bg p-8 sm:p-10 rounded-2xl shadow-2xl mt-12 card-glow-inner">
+        
+        <div class="flex items-center justify-center mb-8">
+            <div class="logo-container">
+                <img src="profile.png" alt="NovaHub Logo" class="w-full h-full object-cover">
+            </div>
+            <h1 class="text-4xl font-bold text-white glow">
+                <span style="color: var(--purple-accent);">NovaHub</span> Obfuscator
+            </h1>
+        </div>
+        
+        <p class="text-purple-light text-center mb-8 font-medium">
+            Paste or upload your Lua code. We provide next-generation protection for scripts compatible with LuaU and Lua 5.1.
+        </p>
+
+        <div class="mb-6">
+            <label for="lua-input" class="block text-sm font-medium text-purple-light mb-2">Input Lua Code:</label>
+            <textarea id="lua-input" rows="12" class="w-full rounded-lg p-4 shadow-inner" placeholder="Enter your valid Lua script here..."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+            <label for="file-upload" class="btn-secondary btn-base w-full sm:w-auto text-sm">
+                <input type="file" id="file-upload" accept=".lua,.txt" onchange="uploadCode(event)">
+                <i class="fas fa-upload mr-2"></i> Upload Code
+            </label>
+
+            <button onclick="obfuscateCode()" id="obfuscate-button"
+                class="btn-primary btn-base w-full sm:w-auto text-sm disabled:opacity-50">
+                <i class="fas fa-lock inline w-5 h-5 mr-2"></i>
+                Obfuscate Code 
+            </button>
+        </div>
+
+        <div id="status" class="text-center font-medium mb-6 min-h-6 text-purple-light">
+            Ready to process your code.
+        </div>
+
+        <div class="mb-4">
+            <label for="lua-output" class="block text-sm font-medium text-purple-light mb-2">Obfuscated Output:</label>
+            <textarea id="lua-output" rows="12" readonly class="w-full rounded-lg p-4 shadow-inner" placeholder="Obfuscated result will appear here."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between gap-4">
+            <div class="flex gap-4 w-full sm:w-auto">
+                <button onclick="copyOutput()" id="copy-button"
+                        class="btn-secondary btn-base w-full sm:w-auto text-xs disabled:opacity-50">
+                    <i class="fas fa-copy mr-2"></i>
+                    Copy Output
+                </button>
+                
+                <button onclick="downloadOutput()" id="download-button"
+                        class="btn-secondary btn-base w-full sm:w-auto text-xs disabled:opacity-50">
+                    <i class="fas fa-download mr-2"></i>
+                    Download .lua
+                </button>
+            </div>
+            
+            <a href="https://discord.gg/2ZEyA8MHsZ" target="_blank" 
+                class="btn-discord btn-base inline-flex items-center justify-center w-full sm:w-auto text-xs">
+                <i class="fab fa-discord text-lg mr-2"></i>
+                Join NovaHub Discord
+            </a>
+        </div>
+        
+    </div>
+
+    <script>
+        document.getElementById('lua-input').value = '-- Simple Example\nlocal health = 100\nfunction checkHealth(dmg)\n  health = health - dmg\n  if health <= 0 then\n    print("Player died!")\n  end\nend\n\ncheckHealth(50)\ncheckHealth(60)';
+
+        function setStatus(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.classList.remove('text-green-400', 'text-purple-light', 'glow');
+            if (isError) {
+                statusElement.classList.add('text-purple-light', 'glow');
+            } else {
+                statusElement.classList.add('text-green-400');
+            }
+            statusElement.classList.add('animate-pulse-once');
+        }
+
+        const style = document.createElement('style');
+        style.innerHTML = `
+        @keyframes pulse-once {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 1; }
+        }
+        .animate-pulse-once {
+            animation: pulse-once 0.5s ease-in-out;
+        }
+        `;
+        document.head.appendChild(style);
+
+        function copyOutput() {
+            const output = document.getElementById('lua-output');
+            if (!output.value.trim()) {
+                setStatus("Nothing to copy!", true);
+                return;
+            }
+            output.select();
+            output.setSelectionRange(0, 99999); 
+
+            try {
+                document.execCommand('copy');
+                setStatus("Copied to clipboard!", false);
+            } catch (err) {
+                setStatus("Failed to copy!", true);
+                console.error('Copy error:', err);
+            }
+        }
+
+        function downloadOutput() {
+            const output = document.getElementById('lua-output');
+            const code = output.value.trim();
+            if (!code) {
+                setStatus("Nothing to download!", true);
+                return;
+            }
+
+            const randomHex = (Math.random() * 0xFFFFFF << 0).toString(16).toUpperCase().padStart(6, '0');
+            const filename = `novahub_obf_${randomHex}.lua`; 
+
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            
+            setStatus(`Downloaded ${filename}!`, false);
+        }
+        
+        function uploadCode(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const validTypes = ['text/plain', 'application/x-lua', ''];
+            if (!validTypes.includes(file.type) && !file.name.endsWith('.lua') && !file.name.endsWith('.txt')) {
+                setStatus(`Unsupported file type: ${file.name}. Please upload a .lua or .txt file.`, true);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('lua-input').value = e.target.result;
+                setStatus(`Successfully loaded ${file.name}. Ready to obfuscate.`, false);
+            };
+            reader.onerror = function() {
+                setStatus(`Error reading file: ${file.name}.`, true);
+            };
+            reader.readAsText(file);
+        }
+
+        async function obfuscateCode() {
+            const input = document.getElementById('lua-input').value;
+            const output = document.getElementById('lua-output');
+            const button = document.getElementById('obfuscate-button');
+            const preset = 'Medium';
+            
+            if (!input.trim()) {
+                setStatus('Please paste or upload some Lua code first!', true);
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+            setStatus(`Obfuscating using the '${preset}' preset... This may take a few seconds.`, false);
+            output.value = '';
+
+            try {
+                const response = await fetch('/obfuscate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: input, preset: preset }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    setStatus('Obfuscation Complete!', false);
+                    output.value = data.obfuscatedCode; 
+                } else {
+                    const errorMsg = data.error || 'Obfuscation Failed';
+                    const details = data.details || 'Unknown server error. (Is the backend running?)';
+                    
+                    setStatus(`ERROR: ${errorMsg}. Check output for details.`, true);
+                    output.value = `--- Execution Error ---\n${details}`;
+                    console.error('Server Error:', details);
+                }
+            } catch (error) {
+                setStatus(`An unexpected network error occurred. (Connection to backend failed)`, true);
+                console.error('Fetch error:', error);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-lock inline w-5 h-5 mr-2"></i>Obfuscate Code';
+            }
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaHub Lua Obfuscator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --purple-dark: #0f001f;
+            --purple-bg: #1e0037;
+            --purple-medium: #3a006b;
+            --purple-accent: #A55EEA;
+            --purple-light: #C3B1E1;
+            --purple-glow: #a55eea70;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Space Grotesk', sans-serif;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+        }
+        
+        body {
+            background: radial-gradient(circle at top left, var(--purple-dark) 0%, #000000 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><filter id="f1"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" result="t1"/><feColorMatrix in="t1" type="saturate" values="0.2"/></filter></defs><rect width="100%" height="100%" fill="none"/><rect width="100%" height="100%" filter="url(%23f1)" opacity="0.05"/></svg>') repeat;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.8;
+        }
+
+        .card-bg {
+            background: var(--purple-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(var(--purple-accent), 0.3); 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px var(--purple-glow);
+        }
+
+        .glow {
+            text-shadow: 0 0 10px var(--purple-accent);
+        }
+        .card-glow-inner {
+            box-shadow: inset 0 0 8px rgba(var(--purple-accent), 0.2);
+        }
+        
+        textarea {
+            resize: none;
+            font-family: monospace;
+            min-height: 250px;
+            background-color: var(--purple-dark);
+            color: #E0E0E0;
+            border: 1px solid rgba(var(--purple-accent), 0.4);
+        }
+        textarea:focus {
+             border-color: var(--purple-accent) !important;
+             box-shadow: 0 0 15px var(--purple-glow) !important;
+        }
+        
+        .btn-base {
+            padding: 0.75rem 1.75rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--purple-accent) 0%, var(--purple-medium) 100%);
+            border: 1px solid var(--purple-accent);
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px var(--purple-glow);
+        }
+        .btn-primary:disabled {
+            background: #40444b;
+            color: #b9bbbe;
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--purple-accent);
+            color: var(--purple-light);
+        }
+        .btn-secondary:hover {
+            background: rgba(var(--purple-accent), 0.2);
+            border-color: var(--purple-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-discord {
+            background: #7289da;
+        }
+        .btn-discord:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(114, 137, 218, 0.5);
+        }
+
+
+        #file-upload { display: none; }
+        .logo-container {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 3px solid var(--purple-accent);
+            margin-right: 16px;
+            box-shadow: 0 0 15px var(--purple-glow);
+            transform: rotate(-5deg);
+        }
+        .logo-container:hover {
+            transform: rotate(0deg) scale(1.05);
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--purple-accent), transparent);
+            margin: 40px 0;
+            opacity: 0.7;
+        }
+
+        .text-purple-light {
+            color: var(--purple-light);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4">
+    <div class="container w-full max-w-4xl card-bg p-8 sm:p-10 rounded-2xl shadow-2xl mt-12 card-glow-inner">
+        
+        <div class="flex items-center justify-center mb-8">
+            <div class="logo-container">
+                <img src="profile.png" alt="NovaHub Logo" class="w-full h-full object-cover">
+            </div>
+            <h1 class="text-4xl font-bold text-white glow">
+                <span style="color: var(--purple-accent);">NovaHub</span> Obfuscator
+            </h1>
+        </div>
+        
+        <p class="text-purple-light text-center mb-8 font-medium">
+            Paste or upload your Lua code. We provide next-generation protection for scripts compatible with LuaU and Lua 5.1.
+        </p>
+
+        <div class="mb-6">
+            <label for="lua-input" class="block text-sm font-medium text-purple-light mb-2">Input Lua Code:</label>
+            <textarea id="lua-input" rows="12" class="w-full rounded-lg p-4 shadow-inner" placeholder="Enter your valid Lua script here..."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+            <label for="file-upload" class="btn-secondary btn-base w-full sm:w-auto text-sm">
+                <input type="file" id="file-upload" accept=".lua,.txt" onchange="uploadCode(event)">
+                <i class="fas fa-upload mr-2"></i> Upload Code
+            </label>
+
+            <button onclick="obfuscateCode()" id="obfuscate-button"
+                class="btn-primary btn-base w-full sm:w-auto text-sm disabled:opacity-50">
+                <i class="fas fa-lock inline w-5 h-5 mr-2"></i>
+                Obfuscate Code 
+            </button>
+        </div>
+
+        <div id="status" class="text-center font-medium mb-6 min-h-6 text-purple-light">
+            Ready to process your code.
+        </div>
+
+        <div class="mb-4">
+            <label for="lua-output" class="block text-sm font-medium text-purple-light mb-2">Obfuscated Output:</label>
+            <textarea id="lua-output" rows="12" readonly class="w-full rounded-lg p-4 shadow-inner" placeholder="Obfuscated result will appear here."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between gap-4">
+            <div class="flex gap-4 w-full sm:w-auto">
+                <button onclick="copyOutput()" id="copy-button"
+                        class="btn-secondary btn-base w-full sm:w-auto text-xs disabled:opacity-50">
+                    <i class="fas fa-copy mr-2"></i>
+                    Copy Output
+                </button>
+                
+                <button onclick="downloadOutput()" id="download-button"
+                        class="btn-secondary btn-base w-full sm:w-auto text-xs disabled:opacity-50">
+                    <i class="fas fa-download mr-2"></i>
+                    Download .lua
+                </button>
+            </div>
+            
+            <a href="https://discord.gg/2ZEyA8MHsZ" target="_blank" 
+                class="btn-discord btn-base inline-flex items-center justify-center w-full sm:w-auto text-xs">
+                <i class="fab fa-discord text-lg mr-2"></i>
+                Join NovaHub Discord
+            </a>
+        </div>
+        
+    </div>
+
+    <script>
+        document.getElementById('lua-input').value = '-- Simple Example\nlocal health = 100\nfunction checkHealth(dmg)\n  health = health - dmg\n  if health <= 0 then\n    print("Player died!")\n  end\nend\n\ncheckHealth(50)\ncheckHealth(60)';
+
+        function setStatus(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.classList.remove('text-green-400', 'text-purple-light', 'glow');
+            if (isError) {
+                statusElement.classList.add('text-purple-light', 'glow');
+            } else {
+                statusElement.classList.add('text-green-400');
+            }
+            statusElement.classList.add('animate-pulse-once');
+        }
+
+        const style = document.createElement('style');
+        style.innerHTML = `
+        @keyframes pulse-once {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 1; }
+        }
+        .animate-pulse-once {
+            animation: pulse-once 0.5s ease-in-out;
+        }
+        `;
+        document.head.appendChild(style);
+
+        function copyOutput() {
+            const output = document.getElementById('lua-output');
+            if (!output.value.trim()) {
+                setStatus("Nothing to copy!", true);
+                return;
+            }
+            output.select();
+            output.setSelectionRange(0, 99999); 
+
+            try {
+                document.execCommand('copy');
+                setStatus("Copied to clipboard!", false);
+            } catch (err) {
+                setStatus("Failed to copy!", true);
+                console.error('Copy error:', err);
+            }
+        }
+
+        function downloadOutput() {
+            const output = document.getElementById('lua-output');
+            const code = output.value.trim();
+            if (!code) {
+                setStatus("Nothing to download!", true);
+                return;
+            }
+
+            const randomHex = (Math.random() * 0xFFFFFF << 0).toString(16).toUpperCase().padStart(6, '0');
+            const filename = `novahub_obf_${randomHex}.lua`; 
+
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            
+            setStatus(`Downloaded ${filename}!`, false);
+        }
+        
+        function uploadCode(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const validTypes = ['text/plain', 'application/x-lua', ''];
+            if (!validTypes.includes(file.type) && !file.name.endsWith('.lua') && !file.name.endsWith('.txt')) {
+                setStatus(`Unsupported file type: ${file.name}. Please upload a .lua or .txt file.`, true);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('lua-input').value = e.target.result;
+                setStatus(`Successfully loaded ${file.name}. Ready to obfuscate.`, false);
+            };
+            reader.onerror = function() {
+                setStatus(`Error reading file: ${file.name}.`, true);
+            };
+            reader.readAsText(file);
+        }
+
+        async function obfuscateCode() {
+            const input = document.getElementById('lua-input').value;
+            const output = document.getElementById('lua-output');
+            const button = document.getElementById('obfuscate-button');
+            const preset = 'Medium';
+            
+            if (!input.trim()) {
+                setStatus('Please paste or upload some Lua code first!', true);
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+            setStatus(`Obfuscating using the '${preset}' preset... This may take a few seconds.`, false);
+            output.value = '';
+
+            try {
+                const response = await fetch('/obfuscate-and-store', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: input, preset: preset }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    setStatus('Obfuscation Complete!', false);
+                    output.value = data.obfuscatedCode; 
+                } else {
+                    const errorMsg = data.error || 'Obfuscation Failed';
+                    const details = data.details || 'Unknown server error. (Is the backend running?)';
+                    
+                    setStatus(`ERROR: ${errorMsg}. Check output for details.`, true);
+                    output.value = `--- Execution Error ---\n${details}`;
+                    console.error('Server Error:', details);
+                }
+            } catch (error) {
+                setStatus(`An unexpected network error occurred. (Connection to backend failed)`, true);
+                console.error('Fetch error:', error);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-lock inline w-5 h-5 mr-2"></i>Obfuscate Code';
+            }
+        }
+    </script>
+</body>
+</html>
