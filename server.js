@@ -11,13 +11,11 @@ const app = express();
 const port = process.env.PORT || 3000; 
 
 // --- CRITICAL: INCREASED PAYLOAD LIMIT TO 100MB ---
-// Fixes the 100kB JSON limit issue experienced during large script upload.
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 // --------------------------------------------------
 
 // --- Database Connection Pool ---
-// Uses the DATABASE_URL environment variable from Render
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
@@ -62,11 +60,11 @@ const generateUniqueId = () => {
 
 
 // =======================================================
-// === OBFUSCATE-ONLY ROUTE (New Obfuscator Frontend) ===
+// === 1. OBFUSCATE ROUTE (Returns Raw Code) ===========
 // =======================================================
-// This route returns the raw obfuscated code to the client.
-app.post('/obfuscate-only', async (req, res) => {
-    const rawLuaCode = req.body.code; // Note: Frontend sends 'code' for this route
+// This route is for the main Obfuscator UI to get raw output.
+app.post('/obfuscate', async (req, res) => {
+    const rawLuaCode = req.body.code; // Note: Frontend sends 'code'
     const preset = 'Medium';
     const timestamp = Date.now();
     
@@ -124,11 +122,11 @@ app.post('/obfuscate-only', async (req, res) => {
 
 
 // =======================================================
-// === OBFUSCATE-AND-STORE ROUTE (Original Unified Flow) ===
+// === 2. OBFUSCATE-AND-STORE ROUTE (Returns Loader Key) ===
 // =======================================================
-// This route is used by the API Locker and older frontends.
+// This route is used by the API Locker to get the secure key.
 app.post('/obfuscate-and-store', async (req, res) => {
-    const rawLuaCode = req.body.script; // Note: Frontend sends 'script' for this route
+    const rawLuaCode = req.body.script; // Note: Frontend sends 'script'
     const preset = 'Medium'; 
     const timestamp = Date.now();
     
@@ -174,7 +172,7 @@ app.post('/obfuscate-and-store', async (req, res) => {
     try {
         await pool.query(
             'INSERT INTO scripts(key, script) VALUES($1, $2)',
-            [scriptKey, obfuscatedCode]
+            [scriptKey, obfuscatedCode] // Store the watermarked, obfuscated code
         );
 
         // Success: Return the key to the frontend
@@ -191,7 +189,7 @@ app.post('/obfuscate-and-store', async (req, res) => {
 
 
 // ====================================================
-// === STORAGE API ENDPOINTS (PostgreSQL Retrieval)===
+// === 3. STORAGE API ENDPOINTS (PostgreSQL Retrieval)===
 // ====================================================
 
 // GET /retrieve/:key (Retrieves the Lua script - Roblox only)
@@ -218,7 +216,7 @@ app.get('/retrieve/:key', async (req, res) => {
 
         const script = result.rows[0].script;
 
-        // 2. Deliver the stored script 
+        // 2. Deliver the stored script (which is already obfuscated and watermarked)
         res.setHeader('Content-Type', 'text/plain');
         res.status(200).send(script);
         
