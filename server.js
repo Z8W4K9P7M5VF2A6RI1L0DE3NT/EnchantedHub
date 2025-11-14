@@ -8,44 +8,47 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 3000;
 
-// --- CRITICAL: INCREASED PAYLOAD LIMIT TO 100MB ---
+// --- CRITICAL: INCREASED PAYLOAD LIMIT ---
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // --- Database Connection Pool ---
+// Uses process.env.DATABASE_URL from Render/dotenv
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    // Add SSL support for cloud databases like Render/Heroku
-    ssl: { rejectUnauthorized: false } 
+    // Required for cloud databases like Render
+    ssl: { rejectUnauthorized: false }
 });
 
 // Define constants
-const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] "; 
+const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] ";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw script. Check your Lua syntax. ]] ";
 const OBFUSCATOR_PRESET = 'Medium';
-const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua'); 
+// Path to the external Lua obfuscator CLI
+const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua');
 
-// Temporary token storage for secure access (in-memory)
-const tempAccessTokens = {}; 
+// Temporary token storage for secure access (in-memory, cleared on server restart)
+const tempAccessTokens = {};
 
 // Test connection and initialize table
 pool.connect((err, client, done) => {
     if (err) {
-        console.error('Database connection failed:', err.stack);
+        console.error('Database connection failed (Check DATABASE_URL):', err.stack);
         return;
     }
     console.log('Successfully connected to PostgreSQL.');
-    
-    // --- UPDATED DATABASE SCHEMA to include access_password_hash ---
+
+    // --- Database Schema (MUST MATCH CODE) ---
+    // Includes all necessary columns: edit_password_hash, access_password_hash, raw_script, obfuscated_script
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS scripts (
             key VARCHAR(32) PRIMARY KEY,
             edit_password_hash VARCHAR(64) NOT NULL,
             access_password_hash VARCHAR(64), 
             raw_script TEXT NOT NULL,
-            obfuscated_script TEXT NOT NULL,
+            obfuscated_script TEXT, -- TEXT should be sufficient for the resulting script
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
     `;
@@ -60,12 +63,12 @@ pool.connect((err, client, done) => {
 });
 
 // Middleware for static files and CORS
-app.use(express.static('public')); 
+// Serves files from the 'public' directory (e.g., /API-SERVICE.html)
+app.use(express.static('public'));
 app.use(cors());
 
 // --- Helper Functions ---
 const generateUniqueId = () => {
-    // Generate a 16-byte (32-character hex) key
     return crypto.randomBytes(16).toString('hex');
 };
 
@@ -96,12 +99,13 @@ const runObfuscationStep = async (rawLuaCode) => {
     const command = `lua ${SCRIPT_LUA_PATH} --preset ${OBFUSCATOR_PRESET} --out ${outputFile} ${tempFile}`;
     
     return new Promise((resolve) => {
-        exec(command, (error, stdout, stderr) => {
+        exec(command, { timeout: 15000 }, (error, stdout, stderr) => { // Timeout added
             // 3. Cleanup input file immediately
             try { fs.unlinkSync(tempFile); } catch (e) { /* silent fail */ } 
             
             if (error || stderr) {
-                console.error(`Prometheus Execution Failed: ${error ? error.message : stderr}`);
+                console.error(`Prometheus Execution Failed: ${error ? (error.killed ? 'Timeout or Kill' : error.message) : stderr}`);
+                
                 // 4. Cleanup output file if it exists, then fallback
                 if (fs.existsSync(outputFile)) { try { fs.unlinkSync(outputFile); } catch (e) { /* silent fail */ } }
                 
@@ -161,7 +165,7 @@ app.post('/obfuscate', async (req, res) => {
 app.post('/create-secure-script', async (req, res) => {
     const rawLuaCode = req.body.script; 
     const editPassword = req.body.editPassword; 
-    const accessPassword = req.body.accessPassword || null; // NEW: Optional access password
+    const accessPassword = req.body.accessPassword || null;
 
     if (!rawLuaCode || rawLuaCode.trim() === '' || !editPassword || editPassword.length < 4) {
         return res.status(400).json({ error: 'Script and a strong edit password (min 4 chars) are required.' });
@@ -173,7 +177,6 @@ app.post('/create-secure-script', async (req, res) => {
     // Step 2: Store Raw, Obfuscated, and Password Hashes
     const scriptKey = generateUniqueId();
     const editPasswordHash = hashPassword(editPassword);
-    // Only hash the access password if one was provided
     const accessPasswordHash = accessPassword ? hashPassword(accessPassword) : null; 
 
     try {
@@ -184,7 +187,6 @@ app.post('/create-secure-script', async (req, res) => {
 
         console.log(`Script created successfully. Key: ${scriptKey}`);
 
-        // Success: Return the Loader Key and the original passwords
         res.status(201).json({ 
             message: obfuscationResult.success ? 'Secure script created.' : 'Script created, but obfuscation failed (using fallback).',
             key: scriptKey,
@@ -194,7 +196,7 @@ app.post('/create-secure-script', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Database error during script creation (Check Schema!):', error.stack); 
+        console.error('Database error during script creation:', error.stack); 
         res.status(500).json({ error: 'Internal server error during script storage.' });
     }
 });
@@ -220,12 +222,10 @@ app.post('/get-raw-for-edit', async (req, res) => {
         
         const storedHash = result.rows[0].edit_password_hash;
 
-        // Check password
         if (storedHash !== passwordHash) {
             return res.status(403).json({ error: 'Invalid password or key combination.' });
         }
 
-        // Success: Return the raw code
         res.status(200).json({ 
             rawScript: result.rows[0].raw_script 
         });
@@ -274,7 +274,6 @@ app.post('/save-and-obfuscate', async (req, res) => {
             [newRawScript, obfuscationResult.code, scriptKey]
         );
 
-        // Success
         res.status(200).json({ 
             message: obfuscationResult.success ? 'Script saved and re-obfuscated successfully.' : 'Script saved, but re-obfuscation failed (using fallback).',
             success: obfuscationResult.success
@@ -288,17 +287,16 @@ app.post('/save-and-obfuscate', async (req, res) => {
 
 
 // ====================================================
-// === 5. SECURE STORAGE API ENDPOINTS ===
+// === 5. SECURE ACCESS / RETRIEVAL ENDPOINTS ===
 // ====================================================
 
-// GET /retrieve/:key: Conditional access point (Roblox gets script, browser gets prompt)
+// GET /retrieve/:key: Conditional access point
 app.get('/retrieve/:key', async (req, res) => {
     const scriptKey = req.params.key;
     const userAgent = req.headers['user-agent'];
 
     // 1. If request comes from Roblox, always serve the script directly
     if (userAgent && userAgent.includes('Roblox')) {
-        console.log(`Roblox request for key: ${scriptKey}`);
         try {
             const result = await pool.query(
                 'SELECT obfuscated_script FROM scripts WHERE key = $1', 
@@ -313,7 +311,7 @@ app.get('/retrieve/:key', async (req, res) => {
             res.status(200).send(result.rows[0].obfuscated_script);
             
         } catch (error) {
-            console.error('Database error during Roblox retrieval:', error.stack);
+            console.error('Database error during Roblox retrieval (Schema Check!):', error.stack);
             res.setHeader('Content-Type', 'text/plain');
             res.status(500).send('-- Error: Internal Server Failure.');
         }
@@ -321,7 +319,6 @@ app.get('/retrieve/:key', async (req, res) => {
     }
 
     // 2. If request is from a browser, check for access password
-    console.log(`Browser request for key: ${scriptKey}`);
     try {
         const result = await pool.query(
             'SELECT access_password_hash FROM scripts WHERE key = $1', 
@@ -329,7 +326,7 @@ app.get('/retrieve/:key', async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).send('Script not found.');
+            return res.status(404).sendFile(path.join(__dirname, 'public', '404.html')); // Fallback to 404 page
         }
 
         const accessPasswordHash = result.rows[0].access_password_hash;
@@ -347,12 +344,12 @@ app.get('/retrieve/:key', async (req, res) => {
             res.status(200).send(scriptResult.rows[0].obfuscated_script);
         }
     } catch (error) {
-        console.error('Database error during browser retrieval check:', error.stack);
+        console.error('Database error during browser retrieval check (Schema Check!):', error.stack);
         res.status(500).send('Internal Server Error.');
     }
 });
 
-// NEW: Endpoint to verify access password from the secure-access.html page
+// Endpoint to verify access password from the secure-access.html page
 app.post('/verify-access/:key', async (req, res) => {
     const scriptKey = req.params.key;
     const { accessPassword } = req.body;
@@ -372,16 +369,21 @@ app.post('/verify-access/:key', async (req, res) => {
         }
 
         const storedHash = result.rows[0].access_password_hash;
+        
+        // If there is no stored hash, but a password was sent, it's an incorrect attempt
+        if (!storedHash) {
+             return res.status(401).json({ error: 'Invalid password. This script may not require one.' });
+        }
+
         const providedHash = hashPassword(accessPassword);
 
-        if (storedHash && storedHash === providedHash) {
+        if (storedHash === providedHash) {
             // Generate a temporary token for this successful access
             const tempToken = generateUniqueId();
             tempAccessTokens[tempToken] = {
                 key: scriptKey,
                 expires: Date.now() + 60 * 1000 // Token valid for 1 minute
             };
-            console.log(`Access granted for key ${scriptKey}. Token: ${tempToken}`);
             return res.status(200).json({ accessGranted: true, tempToken: tempToken });
         } else {
             return res.status(401).json({ error: 'Invalid password.' });
@@ -393,7 +395,7 @@ app.post('/verify-access/:key', async (req, res) => {
     }
 });
 
-// NEW: Endpoint to retrieve actual content after token verification
+// Endpoint to retrieve actual content after token verification
 app.get('/retrieve-content/:key/:token', async (req, res) => {
     const scriptKey = req.params.key;
     const tempToken = req.params.token;
@@ -401,9 +403,9 @@ app.get('/retrieve-content/:key/:token', async (req, res) => {
     const tokenData = tempAccessTokens[tempToken];
 
     if (!tokenData || tokenData.key !== scriptKey || tokenData.expires < Date.now()) {
-        console.warn(`Invalid or expired token attempt for key ${scriptKey}, token ${tempToken}`);
-        delete tempAccessTokens[tempToken]; // Clean up expired/invalid tokens
-        return res.status(403).send('Access denied or token expired. Please try again from the main link.');
+        delete tempAccessTokens[tempToken]; 
+        res.setHeader('Content-Type', 'text/plain');
+        return res.status(403).send('-- Access denied or token expired. Please reload the main link and try again.');
     }
 
     // Token is valid, serve the obfuscated script
@@ -414,7 +416,8 @@ app.get('/retrieve-content/:key/:token', async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).send('Script not found.');
+            res.setHeader('Content-Type', 'text/plain');
+            return res.status(404).send('-- Script not found.');
         }
         
         // Invalidate the token after use
@@ -425,14 +428,15 @@ app.get('/retrieve-content/:key/:token', async (req, res) => {
 
     } catch (error) {
         console.error('Database error during token-verified script retrieval:', error.stack);
-        res.status(500).send('Internal Server Error.');
+        res.setHeader('Content-Type', 'text/plain');
+        res.status(500).send('-- Internal Server Error.');
     }
 });
 
 
-// Basic Health Check
+// Basic Health Check (Optional: Redirect to main UI)
 app.get('/', (req, res) => {
-    res.send('NovaHub Unified Backend (Secure Edit Locker) is running and connected to PostgreSQL.');
+    res.redirect('/API-SERVICE.html');
 });
 
 
