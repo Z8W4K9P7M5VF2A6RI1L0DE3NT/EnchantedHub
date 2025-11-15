@@ -367,7 +367,7 @@
                 
                 updateOutput();
                 
-                setStatus(`Success! Script Key saved: **${data.key}**. **Edit Password: ${accessPassword}**. The loadstring uses the unsecured /api/retrieve endpoint.`, false);
+                setStatus(`Success! Script Key saved: **${data.key}**. **Edit Password: ${accessPassword}**.`, false);
                 
             } catch (error) {
                 setStatus(`ERROR: Failed to connect to API (${API_BASE_URL}). Please check your server status.`, true);
