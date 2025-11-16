@@ -18,8 +18,12 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 // Uses process.env.DATABASE_URL from Render/dotenv
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    // Required for cloud databases like Render
-    ssl: { rejectUnauthorized: true } // Should typically be true in production
+    // =========================================================================
+    // FIX: Set rejectUnauthorized to false to allow self-signed certificates.
+    // This is required to resolve the "Error: self-signed certificate" issue 
+    // commonly seen in cloud hosting environments like Render/Heroku.
+    // =========================================================================
+    ssl: { rejectUnauthorized: false }
 });
 
 // Define constants
