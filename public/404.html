@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 | Script Not Found</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --purple-dark: #0f001f;
+            --purple-bg: #1e0037;
+            --purple-medium: #3a006b;
+            --purple-accent: #A55EEA;
+            --purple-glow: #a55eea70;
+            --red-error: #ff5e5e;
+            --red-glow: #ff5e5e50;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at top left, var(--purple-dark) 0%, #000000 100%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .card {
+            background: var(--purple-bg);
+            border: 1px solid rgba(165, 94, 234, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px var(--purple-glow);
+        }
+        .error-code {
+            text-shadow: 0 0 15px var(--red-glow);
+            color: var(--red-error);
+            font-size: 6rem; /* 96px */
+            line-height: 1;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, var(--purple-accent) 0%, var(--purple-medium) 100%);
+            border: 1px solid var(--purple-accent);
+            padding: 0.75rem 1.5rem;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px var(--purple-glow);
+        }
+    </style>
+</head>
+<body>
+    <div class="card p-8 sm:p-12 rounded-xl shadow-lg w-full max-w-lg mx-4">
+        <div class="error-code font-bold mb-4">
+            404
+        </div>
+        
+        <h1 class="text-4xl font-bold mb-3 text-white">
+            <span class="text-purple-accent">DATA</span> Corruption
+        </h1>
+        
+        <p class="text-lg text-gray-300 mb-8">
+            The script or API you requested has been **deleted** or the key is invalid. 
+            The requested segment of the NovaHub network could not be located.
+        </p>
+
+        <a href="/" class="btn-primary inline-flex items-center text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Return to Core Console
+        </a>
+    </div>
+</body>
+</html>
+
