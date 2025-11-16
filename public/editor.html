@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaHub Script Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --purple-dark: #0f001f;
+            --purple-bg: #1e0037;
+            --purple-medium: #3a006b;
+            --purple-accent: #A55EEA;
+            --purple-glow: #a55eea70;
+            --code-bg: #110022;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at top left, var(--purple-dark) 0%, #000000 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .card {
+            background: var(--purple-bg);
+            border: 1px solid rgba(165, 94, 234, 0.3);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, var(--purple-accent) 0%, var(--purple-medium) 100%);
+            border: 1px solid var(--purple-accent);
+            padding: 0.5rem 1rem;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 10px var(--purple-glow);
+        }
+        .btn-danger {
+            background-color: #7b001a;
+            border: 1px solid #ff5e5e;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #9c0021;
+        }
+        #editor-area {
+            background: var(--code-bg);
+            border: 1px solid var(--purple-medium);
+            color: #f0f0f0;
+            font-family: monospace;
+            min-height: 50vh;
+            resize: vertical;
+            line-height: 1.4;
+            tab-size: 4;
+            overflow-x: auto;
+        }
+        .status-message {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .status-message.error {
+            background-color: #4d0000;
+            color: #ff5e5e;
+            border: 1px solid #ff5e5e;
+        }
+        .status-message.success {
+            background-color: #004d00;
+            color: #5eff5e;
+            border: 1px solid #5eff5e;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background: var(--purple-bg);
+            border: 1px solid var(--purple-accent);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-7xl mx-auto py-4">
+        <h1 class="text-4xl font-bold mb-4 text-center" style="text-shadow: 0 0 10px var(--purple-glow);">
+            <span class="text-purple-accent">NovaHub</span> Script Editor
+        </h1>
+
+        <div class="card p-6 rounded-xl">
+            <div id="loader-status" class="status-message hidden mb-4"></div>
+
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6 border-b border-purple-medium pb-4">
+                <p class="text-lg font-medium mb-2 md:mb-0">Key: <span id="script-key-display" class="text-purple-accent font-mono">Loading...</span></p>
+                <button onclick="copyLoaderUrl()" class="btn-primary flex items-center justify-center text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span id="copy-btn-text">Copy Loader URL</span>
+                </button>
+            </div>
+
+            <div id="editor-container" class="relative">
+                <textarea id="editor-area" class="w-full p-4 rounded-lg text-sm" placeholder="Loading script..."></textarea>
+            </div>
+
+            <div class="mt-6 flex flex-col sm:flex-row justify-between space-y-4 sm:space-y-0 sm:space-x-4">
+                <button onclick="saveScript()" id="save-button" class="btn-primary w-full sm:w-auto">
+                    Save & Re-Obfuscate
+                </button>
+                <div class="flex space-x-4 w-full sm:w-auto">
+                    <button onclick="openChangePasswordModal()" class="btn-primary bg-transparent text-purple-accent border-purple-accent hover:bg-purple-medium/20 w-1/2 sm:w-auto">
+                        Change Password
+                    </button>
+                    <button onclick="openDeleteModal()" class="btn-danger w-1/2 sm:w-auto">
+                        Delete Script
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="change-password-modal" class="modal-overlay hidden">
+        <div class="modal-content p-6 rounded-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Change Edit Password</h2>
+            <div id="pw-status" class="status-message hidden"></div>
+            <label for="new-password" class="block mb-2 text-sm font-medium">New Password (Min 4 Chars)</label>
+            <input type="password" id="new-password" class="w-full p-3 rounded-lg bg-code-bg text-white mb-4" placeholder="Enter New Password">
+            
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeChangePasswordModal()" class="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-700">Cancel</button>
+                <button onclick="changePassword()" class="btn-primary">Update Password</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-modal" class="modal-overlay hidden">
+        <div class="modal-content p-6 rounded-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4 text-red-400">Confirm Deletion</h2>
+            <div id="del-status" class="status-message hidden"></div>
+            <p class="mb-4">Are you sure you want to **PERMANENTLY** delete this script? This action cannot be undone.</p>
+            <label for="delete-password" class="block mb-2 text-sm font-medium">Enter Edit Password to Confirm</label>
+            <input type="password" id="delete-password" class="w-full p-3 rounded-lg bg-code-bg text-white mb-4" placeholder="Edit Password">
+            
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-700">Cancel</button>
+                <button onclick="deleteScript()" class="btn-danger">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        let scriptKey = '';
+        let editPassword = '';
+
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                key: params.get('key'),
+                password: params.get('password')
+            };
+        }
+
+        function updateStatus(elementId, message, type = 'default') {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.textContent = message;
+            el.className = 'status-message';
+            el.classList.add(type === 'error' ? 'error' : (type === 'success' ? 'success' : ''));
+            el.classList.remove('hidden');
+        }
+
+        function hideStatus(elementId) {
+            document.getElementById(elementId)?.classList.add('hidden');
+        }
+
+        function setButtonLoading(buttonId, isLoading) {
+            const btn = document.getElementById(buttonId);
+            if (!btn) return;
+            btn.disabled = isLoading;
+            btn.textContent = isLoading ? 'Processing...' : btn.dataset.originalText;
+        }
+
+        async function loadInitialScript() {
+            const query = getQueryParams();
+            scriptKey = query.key;
+            editPassword = query.password;
+
+            if (!scriptKey || !editPassword) {
+                updateStatus('loader-status', 'Error: Missing key or password in URL. Cannot load editor.', 'error');
+                document.getElementById('editor-area').value = '-- Error: Missing authentication credentials.';
+                return;
+            }
+
+            document.getElementById('script-key-display').textContent = scriptKey;
+            document.getElementById('editor-area').placeholder = 'Loading script from database...';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/get-raw-for-edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: scriptKey, password: editPassword })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.rawScript) {
+                    document.getElementById('editor-area').value = data.rawScript;
+                    updateStatus('loader-status', 'Script loaded successfully. You are viewing the RAW source code.', 'success');
+                } else {
+                    document.getElementById('editor-area').value = `-- Access Denied: ${data.error || 'Invalid credentials or script not found.'}`;
+                    updateStatus('loader-status', 'Failed to load script. Redirecting for re-verification...', 'error');
+                    
+                    setTimeout(() => {
+                        window.location.href = `${API_BASE_URL}/edit-access.html`; 
+                    }, 3000);
+                }
+            } catch (error) {
+                updateStatus('loader-status', 'Critical network error during script fetch.', 'error');
+                document.getElementById('editor-area').value = '-- Critical Network Error. Check console.';
+                console.error('Initial Load Error:', error);
+            }
+        }
+
+        async function saveScript() {
+            const newScript = document.getElementById('editor-area').value;
+            setButtonLoading('save-button', true);
+            hideStatus('loader-status');
+
+            if (newScript.trim() === '') {
+                updateStatus('loader-status', 'Script content cannot be empty.', 'error');
+                setButtonLoading('save-button', false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/save-and-obfuscate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        key: scriptKey, 
+                        password: editPassword, 
+                        newScript: newScript 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const message = data.success 
+                        ? 'Script saved and re-obfuscated successfully!' 
+                        : 'Saved successfully, but obfuscation failed (fallback script used).';
+                    updateStatus('loader-status', message, 'success');
+                } else {
+                    updateStatus('loader-status', data.error || 'Failed to save script. Check credentials.', 'error');
+                }
+            } catch (error) {
+                updateStatus('loader-status', 'Network error during save operation.', 'error');
+                console.error('Save Error:', error);
+            } finally {
+                setButtonLoading('save-button', false);
+            }
+        }
+
+        function copyLoaderUrl() {
+            const url = `${API_BASE_URL}/api/retrieve/${scriptKey}`;
+            
+            const tempInput = document.createElement('input');
+            tempInput.value = url;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            const btn = document.getElementById('copy-btn-text');
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = originalText; }, 1500);
+        }
+
+        function openChangePasswordModal() {
+            document.getElementById('change-password-modal').classList.remove('hidden');
+            hideStatus('pw-status');
+            document.getElementById('new-password').value = '';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('change-password-modal').classList.add('hidden');
+        }
+
+        async function changePassword() {
+            const newPassword = document.getElementById('new-password').value;
+            const pwStatus = document.getElementById('pw-status');
+            
+            if (newPassword.length < 4) {
+                updateStatus('pw-status', 'New password must be at least 4 characters.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/change-edit-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        key: scriptKey, 
+                        oldPassword: editPassword,
+                        newPassword: newPassword 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    editPassword = newPassword; 
+                    updateStatus('pw-status', 'Password changed successfully! New password is now active.', 'success');
+                    
+                    setTimeout(closeChangePasswordModal, 2000); 
+
+                } else {
+                    updateStatus('pw-status', data.error || 'Failed to change password.', 'error');
+                }
+            } catch (error) {
+                updateStatus('pw-status', 'Network error during password change.', 'error');
+                console.error('Change Password Error:', error);
+            }
+        }
+
+        function openDeleteModal() {
+            document.getElementById('delete-modal').classList.remove('hidden');
+            hideStatus('del-status');
+            document.getElementById('delete-password').value = '';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.add('hidden');
+        }
+
+        async function deleteScript() {
+            const deletePassword = document.getElementById('delete-password').value;
+            const delStatus = document.getElementById('del-status');
+
+            if (deletePassword !== editPassword) {
+                 updateStatus('del-status', 'Password mismatch or incorrect.', 'error');
+                 return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/delete-script`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        key: scriptKey, 
+                        password: deletePassword 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    updateStatus('del-status', 'Script deleted permanently! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = `${API_BASE_URL}/API-SERVICE.html`; 
+                    }, 2000);
+                } else {
+                    updateStatus('del-status', data.error || 'Failed to delete script.', 'error');
+                }
+            } catch (error) {
+                updateStatus('del-status', 'Network error during deletion.', 'error');
+                console.error('Delete Error:', error);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             document.getElementById('save-button').dataset.originalText = 'Save & Re-Obfuscate';
+             loadInitialScript();
+        });
+    </script>
+</body>
+</html>
+
