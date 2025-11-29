@@ -1,107 +1,181 @@
-const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
-const fetch = require('node-fetch');
-const { runObfuscator } = require('./obfuscator');
-require('dotenv').config();
+const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-// --- Configuration ---
-const MAX_FILE_SIZE_MB = 8;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const DEFAULT_PRESET = 'Medium';
-const LUA_EXTENSION = '.lua';
-const TXT_EXTENSION = '.txt';
+// Ensure Discord token is available from the environment variables set on Render
+if (!process.env.DISCORD_TOKEN) {
+    console.error("FATAL ERROR: DISCORD_TOKEN is not set in environment variables.");
+    process.exit(1);
+}
 
-// Initialize Discord Client (needs Guilds and MessageContent intents)
-const client = new Client({ 
+// --- CONFIGURATION ---
+const TOKEN = process.env.DISCORD_TOKEN;
+// Your specific Client ID has been inserted here:
+const CLIENT_ID = '1444160895872663615'; 
+const TEMP_DIR = path.join(__dirname, 'temp_files');
+
+// Create temp directory if it doesn't exist
+if (!fs.existsSync(TEMP_DIR)) {
+    fs.mkdirSync(TEMP_DIR);
+}
+
+// --- CLIENT SETUP ---
+const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent 
-    ] 
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.DirectMessages,
+    ],
+    partials: [Partials.Channel],
 });
 
-// --- Bot Ready and Command Registration ---
-client.on('ready', async () => {
+client.commands = new Collection();
+client.once('clientReady', () => { // Using clientReady to fix the deprecation warning
     console.log(`[BOT] Logged in as ${client.user.tag}!`);
-    
-    // Define the /obf slash command
-    const obfCommand = new SlashCommandBuilder()
-        .setName('obf')
-        .setDescription(`Obfuscates an attached .lua or .txt script (Output is .txt).`)
-        .addAttachmentOption(option => 
-            option.setName('script')
-                  .setDescription('The .lua or .txt file containing the Lua code.')
-                  .setRequired(true)
-        );
-
-    try {
-        await client.application.commands.create(obfCommand);
-        console.log('[BOT] Registered /obf slash command.');
-    } catch (error) {
-        console.error('[BOT] Failed to register /obf command:', error);
-    }
+    registerSlashCommands();
 });
 
+// --- COMMAND HANDLER ---
 
-// --- Slash Command Interaction Handler (/obf) ---
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
+// Handle interaction created (slash commands)
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isCommand()) return;
 
+    // --- /obf COMMAND ---
     if (interaction.commandName === 'obf') {
-        await interaction.deferReply({ ephemeral: false }); 
+        // Use ephemeral: true to make the initial reply private (only the user sees it)
+        await interaction.reply({ content: 'Processing file for obfuscation... This message is private.', ephemeral: true });
 
-        const attachment = interaction.options.getAttachment('script'); 
-        const preset = DEFAULT_PRESET; 
-        
-        const fileName = attachment.name;
-        const lowerCaseFileName = fileName.toLowerCase();
+        const attachment = interaction.options.getAttachment('file');
 
-        // 1. Validation: Accepts .lua OR .txt
-        const isLuaOrTxt = lowerCaseFileName.endsWith(LUA_EXTENSION) || lowerCaseFileName.endsWith(TXT_EXTENSION);
-
-        if (!isLuaOrTxt || attachment.size > MAX_FILE_SIZE_BYTES) { 
-            return interaction.editReply(`❌ Please attach a valid Lua script file. We accept **.lua** or **.txt** inputs, but the size must be under **${MAX_FILE_SIZE_MB}MB**.`);
+        if (!attachment || !attachment.name.endsWith('.lua')) {
+            return interaction.editReply({ 
+                content: '❌ Error: Please upload a valid `.lua` file.',
+                ephemeral: true 
+            });
         }
-        
-        try {
-            // 2. Download the attached file content
-            const response = await fetch(attachment.url);
-            if (!response.ok) {
-                 return interaction.editReply('❌ Failed to download script from Discord. Please try again.');
-            }
-            const rawLuaCode = await response.text();
-            
-            // 3. Run the core obfuscation logic
-            const obfuscatedCode = await runObfuscator(rawLuaCode, preset); 
 
-            // 4. Determine the base file name and force .txt output
-            let baseName = fileName;
+        const inputFilePath = path.join(TEMP_DIR, `input_${interaction.id}.lua`);
+        const outputFilePath = path.join(TEMP_DIR, `output_${interaction.id}.lua`);
+
+        try {
+            // 1. Download the file content
+            const response = await fetch(attachment.url);
+            if (!response.ok) throw new Error(`Failed to download file: ${response.statusText}`);
             
-            // Remove existing extension (case-insensitive)
-            if (lowerCaseFileName.endsWith(LUA_EXTENSION)) {
-                baseName = fileName.slice(0, -LUA_EXTENSION.length);
-            } else if (lowerCaseFileName.endsWith(TXT_EXTENSION)) {
-                baseName = fileName.slice(0, -TXT_EXTENSION.length);
-            }
-            
-            // Append the desired .txt extension
-            const outputFileName = `${baseName}${TXT_EXTENSION}`;
-            
-            const obfBuffer = Buffer.from(obfuscatedCode, 'utf8');
-            const obfFile = new AttachmentBuilder(obfBuffer, { 
-                name: `obfuscated_${outputFileName}` 
+            const fileBuffer = await response.buffer();
+            fs.writeFileSync(inputFilePath, fileBuffer);
+
+            // 2. Execute the Lua Obfuscator (assuming 'lua-obfuscator' is your executable)
+            // The spawn command should reference your actual obfuscator tool.
+            const obfuscatorProcess = spawn('lua', [
+                'obfuscator/obfuscator.lua', // Replace with the actual path to your Lua obfuscator script/binary
+                inputFilePath, 
+                outputFilePath
+            ]);
+
+            let stderr = '';
+            obfuscatorProcess.stderr.on('data', (data) => {
+                stderr += data.toString();
             });
 
-            await interaction.editReply({ 
-                content: `✅ **Obfuscation Complete** (Preset: ${preset})! Your output file is **.txt** format.`, 
-                files: [obfFile] 
+            await new Promise((resolve, reject) => {
+                obfuscatorProcess.on('close', (code) => {
+                    if (code === 0) {
+                        resolve();
+                    } else {
+                        // Obfuscator returned a non-zero code, indicating failure (often syntax error)
+                        reject(new Error(stderr || 'Obfuscation process failed with a non-zero exit code.'));
+                    }
+                });
+                obfuscatorProcess.on('error', (err) => {
+                    reject(err);
+                });
+            });
+
+            // 3. Check for successful output file generation
+            if (!fs.existsSync(outputFilePath)) {
+                 throw new Error('Obfuscation failed to produce an output file. Check the obfuscator script/binary path.');
+            }
+
+            // 4. Send success reply with the obfuscated file (still ephemeral)
+            const attachmentToSend = new AttachmentBuilder(outputFilePath, { name: `obfuscated_${attachment.name}` });
+            
+            // Success message with fixed grammar and requested emoji: "✅️ obfuscation sucsessfull" -> "✅ Obfuscation successful!"
+            await interaction.editReply({
+                content: '✅ Obfuscation successful! Your private obfuscated file is attached below.',
+                files: [attachmentToSend],
+                ephemeral: true // Ensures the final message and file remain private
             });
 
         } catch (error) {
-            console.error('[BOT] Slash Command Obfuscation Error:', error);
-            await interaction.editReply('❌ An internal error occurred while processing your script. Check the host console for details.');
+            console.error(`Obfuscation Error for ${interaction.id}:`, error.message);
+            
+            let errorMessage;
+            
+            // Check if the error indicates a syntax issue (most common obfuscation failure)
+            const syntaxErrorMatch = error.message.toLowerCase().includes('syntax') || error.message.toLowerCase().includes('failed');
+            if (syntaxErrorMatch) {
+                 // Requested failure message with fixed grammar: "Error in syan tax code" -> 
+                 errorMessage = '❌ Error: Invalid Lua syntax. Please check your code.';
+            } else {
+                 errorMessage = '❌ Error: An unknown error occurred during obfuscation. Please try again.';
+            }
+
+            // Send failure message (still ephemeral)
+            await interaction.editReply({ 
+                content: errorMessage,
+                ephemeral: true 
+            });
+
+        } finally {
+            // 5. Cleanup temporary files
+            try {
+                if (fs.existsSync(inputFilePath)) fs.unlinkSync(inputFilePath);
+                if (fs.existsSync(outputFilePath)) fs.unlinkSync(outputFilePath);
+            } catch (cleanupError) {
+                console.error("Error cleaning up temp files:", cleanupError);
+            }
         }
     }
 });
 
+// --- COMMAND REGISTRATION ---
 
-client.login(process.env.DISCORD_TOKEN);
+// Define the slash command structure
+const commands = [
+    {
+        name: 'obf',
+        description: 'Uploads a Lua file for private obfuscation.',
+        options: [
+            {
+                name: 'file',
+                description: 'The .lua file to obfuscate.',
+                type: 11, // ApplicationCommandOptionType.Attachment
+                required: true,
+            },
+        ],
+    },
+];
+
+// Function to register the slash commands with Discord
+async function registerSlashCommands() {
+    try {
+        const rest = new REST({ version: '10' }).setToken(TOKEN);
+        
+        // Registering commands globally using your CLIENT_ID
+        await rest.put(
+            Routes.applicationCommands(CLIENT_ID),
+            { body: commands },
+        );
+        console.log('[BOT] Registered /obf slash command.');
+
+    } catch (error) {
+        console.error('[BOT] Failed to register commands:', error);
+        // Ensure CLIENT_ID is correctly set in the configuration section above.
+    }
+}
+
+client.login(TOKEN);
