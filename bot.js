@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
-const { spawn } = require('child_process');
+const { spawn } = require('child_process'); // No longer used for obfuscation, but needed for the module structure
 const fs = require('fs');
 const path = require('path');
 
@@ -11,14 +11,12 @@ if (!process.env.DISCORD_TOKEN) {
 
 // --- CONFIGURATION ---
 const TOKEN = process.env.DISCORD_TOKEN;
-// Your specific Client ID:
 const CLIENT_ID = '1444160895872663615'; 
-const TEMP_DIR = path.join(__dirname, 'temp_files');
+// The bot will now call the API endpoint running on the same server.
+// RENDER_EXTERNAL_URL is available in the Node.js environment on Render.
+const API_BASE_URL = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'; 
+const OBFUSCATE_ENDPOINT = `${API_BASE_URL}/obfuscate`; 
 
-// Create temp directory if it doesn't exist
-if (!fs.existsSync(TEMP_DIR)) {
-    fs.mkdirSync(TEMP_DIR);
-}
 
 // --- CLIENT SETUP ---
 const client = new Client({
@@ -32,7 +30,6 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-// Using clientReady to fix the deprecation warning and confirm login
 client.once('clientReady', () => { 
     console.log(`[BOT] Logged in as ${client.user.tag}!`);
     registerSlashCommands();
@@ -40,19 +37,18 @@ client.once('clientReady', () => {
 
 // --- COMMAND HANDLER ---
 
-// Handle interaction created (slash commands)
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
 
     // --- /obf COMMAND ---
     if (interaction.commandName === 'obf') {
         // Initial reply is private (ephemeral)
-        await interaction.reply({ content: 'Processing file for obfuscation... This message is private.', ephemeral: true });
+        await interaction.reply({ content: 'Processing file for obfuscation via API... This message is private.', ephemeral: true });
 
         const attachment = interaction.options.getAttachment('file'); 
         const fileName = attachment?.name.toLowerCase();
 
-        // 1. UPDATED VALIDATION: Accept both .lua and .txt
+        // 1. VALIDATION: Accept both .lua and .txt
         if (
             !attachment || 
             (!fileName.endsWith('.lua') && !fileName.endsWith('.txt'))
@@ -62,65 +58,47 @@ client.on('interactionCreate', async interaction => {
                 ephemeral: true 
             });
         }
-
-        const inputFilePath = path.join(TEMP_DIR, `input_${interaction.id}.lua`);
-        const outputFilePath = path.join(TEMP_DIR, `output_${interaction.id}.lua`);
-
+        
         try {
             // 2. Download the file content
             const response = await fetch(attachment.url);
             if (!response.ok) throw new Error(`Failed to download file: ${response.statusText}`);
             
-            const fileBuffer = await response.buffer();
-            fs.writeFileSync(inputFilePath, fileBuffer);
-
-            // 3. Execute the Lua Obfuscator 
-            const obfuscatorProcess = spawn('lua', [
-                'obfuscator/obfuscator.lua', // Path to your Lua obfuscator script
-                inputFilePath, 
-                outputFilePath
-            ]);
-
-            let stderr = '';
-            obfuscatorProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
+            const rawLuaCode = await response.text();
+            
+            // 3. NEW: Call the local API endpoint for obfuscation
+            const apiResponse = await fetch(OBFUSCATE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: rawLuaCode, 
+                    fileName: attachment.name 
+                }),
             });
 
-            await new Promise((resolve, reject) => {
-                obfuscatorProcess.on('close', (code) => {
-                    if (code === 0) {
-                        resolve();
-                    } else {
-                        // Obfuscator failed (likely a syntax error in the uploaded code)
-                        reject(new Error(stderr || 'Obfuscation process failed with a non-zero exit code.'));
-                    }
-                });
-                obfuscatorProcess.on('error', (err) => {
-                    reject(err);
-                });
-            });
-
-            // 4. Check for successful output file generation
-            if (!fs.existsSync(outputFilePath)) {
-                 throw new Error('Obfuscation failed to produce an output file. Check the obfuscator script/binary path.');
+            // Check API response status
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json().catch(() => ({ message: 'API responded with an error status.' }));
+                throw new Error(errorData.message || 'API responded with an error.');
             }
 
-            // 5. Determine the output file name, ensuring it always ends in .lua
+            const result = await apiResponse.json();
+            const obfuscatedCode = result.obfuscatedCode;
+            
+            // 4. Determine the output file name, ensuring it always ends in .lua
             let outputFileName = attachment.name;
             if (outputFileName.toLowerCase().endsWith('.txt')) {
-                // If the original was .txt, change the extension to .lua
                 outputFileName = outputFileName.slice(0, -4) + '.lua';
             }
-            // If it was already .lua, the name remains the same.
 
-
-            // 6. Send success reply with the obfuscated file (STILL PRIVATE)
-            const attachmentToSend = new AttachmentBuilder(outputFilePath, { name: `obfuscated_${outputFileName}` });
+            // 5. Send success reply with the obfuscated file (STILL PRIVATE)
+            const obfBuffer = Buffer.from(obfuscatedCode, 'utf8');
+            const attachmentToSend = new AttachmentBuilder(obfBuffer, { name: `obfuscated_${outputFileName}` });
             
             await interaction.editReply({
                 content: '✅ Obfuscation successful! Your private obfuscated file is attached below.',
                 files: [attachmentToSend],
-                ephemeral: true // Ensures the final message and file remain private
+                ephemeral: true
             });
 
         } catch (error) {
@@ -128,12 +106,11 @@ client.on('interactionCreate', async interaction => {
             
             let errorMessage;
             
-            // Check if the error indicates a syntax issue
-            const syntaxErrorMatch = error.message.toLowerCase().includes('syntax') || error.message.toLowerCase().includes('failed');
-            if (syntaxErrorMatch) {
+            // Check for API-reported syntax error (will be passed through error.message)
+            if (error.message.includes('Invalid Lua syntax')) {
                  errorMessage = '❌ Error: Invalid Lua syntax. Please check your code.';
             } else {
-                 errorMessage = '❌ Error: An unknown error occurred during obfuscation. Please try again.';
+                 errorMessage = `❌ Error: ${error.message}. Please try again.`;
             }
 
             // Send failure message (STILL PRIVATE)
@@ -141,15 +118,6 @@ client.on('interactionCreate', async interaction => {
                 content: errorMessage,
                 ephemeral: true 
             });
-
-        } finally {
-            // 7. Cleanup temporary files
-            try {
-                if (fs.existsSync(inputFilePath)) fs.unlinkSync(inputFilePath);
-                if (fs.existsSync(outputFilePath)) fs.unlinkSync(outputFilePath);
-            } catch (cleanupError) {
-                console.error("Error cleaning up temp files:", cleanupError);
-            }
         }
     }
 });
