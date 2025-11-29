@@ -1,53 +1,48 @@
+
+
 require("dotenv").config();
 const {
   Client,
-  // NOTE: Intents are now passed as PascalCase strings, avoiding the deprecated Intents.FLAGS syntax.
-  MessageEmbed,
-  MessageActionRow,
-  MessageSelectMenu,
-  MessageAttachment,
+  GatewayIntentBits,
+  Partials,
+  EmbedBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  AttachmentBuilder
 } = require("discord.js");
+
 const axios = require("axios");
 const fs = require("fs");
 const child_process = require("child_process");
 const path = require("path");
 
+/* ----------------------- Logging ----------------------- */
 const log = (...e) => console.log("[PROMETHEUS]", ...e);
 const error = (...e) => console.error("[PROMETHEUS]", ...e);
 
+/* ----------------------- Temp Folder ----------------------- */
 const tempDir = path.join(__dirname, "Temp_files");
 if (!fs.existsSync(tempDir)) {
   error("❌ Temp_files directory does not exist! Please create it manually.");
   process.exit(1);
 }
 
+/* ----------------------- Storage Channel ----------------------- */
 const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || process.env.CDN_STORAGE_CHANNEL_ID;
 
-/**
- * Fetches and verifies the storage channel.
- * @param {Client} client - The Discord client.
- * @returns {Promise<import('discord.js').TextChannel>} The storage channel.
- */
 async function ensureStorageChannel(client) {
-  if (!STORAGE_CHANNEL_ID) throw new Error("STORAGE_CHANNEL_ID is not set in .env");
+  if (!STORAGE_CHANNEL_ID) throw new Error("STORAGE_CHANNEL_ID not set in .env");
   let ch = client.channels.cache.get(STORAGE_CHANNEL_ID);
   if (!ch) ch = await client.channels.fetch(STORAGE_CHANNEL_ID).catch(() => null);
-  // Using 'send' in ch is a quick way to check if it's a TextChannel or a DMChannel that the bot can send to
-  if (!ch || !("send" in ch)) throw new Error("STORAGE_CHANNEL_ID does not point to a text channel the bot can send to.");
+  if (!ch || !("send" in ch)) throw new Error("Invalid STORAGE_CHANNEL_ID or missing permissions.");
   return ch;
 }
 
-/**
- * Executes the obfuscation process using luajit.
- * @param {string} inputFile - Path to the input Lua file.
- * @param {string} preset - Obfuscation preset (Weak, Medium, Strong).
- * @returns {Promise<string>} Path to the output obfuscated Lua file.
- */
+/* ----------------------- Obfuscation Process ----------------------- */
 function obfuscate(inputFile, preset) {
   return new Promise((resolve, reject) => {
     const outputFile = path.join(tempDir, `obfuscated_${Date.now()}.lua`);
-    
-    // Note: If you face path errors, you might need to use absolute paths for the executables.
+
     const proc = child_process.spawn("./bin/luajit.exe", [
       "./lua/cli.lua",
       "--preset",
@@ -56,242 +51,230 @@ function obfuscate(inputFile, preset) {
       "--out",
       outputFile,
     ]);
-    
+
     let stderr = "";
     proc.stderr.on("data", (d) => (stderr += d.toString()));
-    
+
     proc.on("close", (code) => {
       if (code !== 0) return reject(stderr || `luajit exited with code ${code}`);
       resolve(outputFile);
     });
-    
+
     proc.on("error", (err) => {
-      reject(`Failed to start luajit process: ${err.message}. Ensure ./bin/luajit.exe is executable.`);
+      reject(`Failed to start luajit.exe: ${err.message}`);
     });
   });
 }
 
-// Collect all tokens from env
+/* ----------------------- Tokens ----------------------- */
 const tokens = Object.keys(process.env)
   .filter((key) => key.startsWith("DISCORD_TOKEN"))
   .map((key) => process.env[key]);
 
 if (tokens.length === 0) {
-  error("❌ No DISCORD_TOKEN found in .env!");
+  error("❌ No DISCORD_TOKEN found in .env");
   process.exit(1);
 }
 
-/**
- * Creates and initializes a Discord bot client.
- * @param {string} token - The Discord bot token.
- * @param {number} botNumber - The number identifier for the bot instance.
- */
+/* ----------------------- Bot Creator ----------------------- */
 function createBot(token, botNumber) {
   const client = new Client({
-    // Use string literals for Intents (recommended and non-deprecated)
-    intents: ["GUILDS", "GUILD_MESSAGES", "DIRECT_MESSAGES"],
-    partials: ["CHANNEL"],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent, // REQUIRED for reading messages
+    ],
+    partials: [Partials.Channel]
   });
 
+  /* ----------------------- Bot Ready ----------------------- */
   client.once("ready", () => {
-    log(`✅ Bot #${botNumber} logged in as ${client.user?.tag || "Unknown"}`);
+    log(`✅ Bot #${botNumber} logged in as ${client.user.tag}`);
 
-    // Set presence: DND + Playing Obfuscating Nyx Files
     client.user.setPresence({
       status: "dnd",
-      activities: [
-        {
-          name: "Obfuscating Nyx Files",
-          type: "PLAYING",
-        },
-      ],
+      activities: [{ name: "Obfuscating Nyx Files", type: 0 }]
     });
   });
 
   client.login(token);
 
+  /* ----------------------- Message Handler ----------------------- */
   client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
 
-    // .help
+    /* ------------ HELP COMMAND ------------ */
     if (msg.content.toLowerCase() === ".help") {
-      const helpText = `📖 Obfuscator Bot Help
-Here’s how to use the bot to obfuscate your scripts:
-🔹 **Command**: \`.obf\` [attach your .lua/.txt file or paste inside a codeblock]
-🔹 **Supported Files**: \`.lua\` and \`.txt\` only, or codeblocks
-🔹 **Obfuscation Levels**: Weak 🪶, Medium 🛡️, Strong 💪 (chosen via dropdown)
-🔒 **Privacy**: Use this bot in Direct Messages (DMs) for privacy.
-🔹 **Example**: \`.obf\` → Attach file OR paste in codeblock → Choose obfuscation level → Get protected file ✅
-Made with ❤️ by Slayerson`;
-
-      const helpEmbed = new MessageEmbed()
-        .setColor("BLUE")
+      const helpEmbed = new EmbedBuilder()
+        .setColor("Blue")
         .setTitle("📖 Obfuscator Bot Help")
-        .setDescription(helpText)
-        .setFooter({ text: "Made by Slayerson • Credits to Vyxonq • Powered by Nyx Obfuscator" });
+        .setDescription(
+`Here’s how to use the bot:
 
-      msg.channel.send({ embeds: [helpEmbed] }).catch((err) => error("Failed to send help message:", err));
-      return;
+🔹 **Command:** \`.obf\`  
+Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`\`
+
+🔹 **Levels:** Weak 🪶, Medium 🛡️, Strong 💪  
+🔒 Use DM for privacy`
+        )
+        .setFooter({ text: "Made by Slayerson • Powered by Nyx Obfuscator" });
+
+      return msg.reply({ embeds: [helpEmbed] });
     }
 
-    // .obf
+    /* ------------ OBFUSCATION COMMAND ------------ */
     if (msg.content.toLowerCase().startsWith(".obf")) {
       let inputFile;
       let originalFileName;
 
-      // --- Helper function for cleanup ---
       const cleanup = () => {
-        try { fs.unlinkSync(inputFile); } catch (e) { /* ignore */ }
-        try { fs.unlinkSync(path.join(tempDir, `obfuscated_${Date.now()}.lua`)); } catch (e) { /* ignore */ }
-        try { fs.unlinkSync(path.join(tempDir, `obfuscated_final_${Date.now()}.lua`)); } catch (e) { /* ignore */ }
+        try { fs.unlinkSync(inputFile); } catch {}
       };
 
       try {
+        /* ---------- FILE ATTACHMENT ---------- */
         const attachment = msg.attachments.first();
         if (attachment) {
           const ext = path.extname(attachment.name).toLowerCase();
-          if (ext !== ".lua" && ext !== ".txt") {
-            const errorEmbed = new MessageEmbed()
-              .setColor("RED")
-              .setTitle("❌ Obfuscation Failed")
-              .setDescription("Only **`.lua`** and **`.txt`** files are supported!\nWe apologize for the inconvenience. 🙏");
-            msg.reply({ embeds: [errorEmbed] });
-            return;
+          if (![".lua", ".txt"].includes(ext)) {
+            return msg.reply({
+              embeds: [new EmbedBuilder()
+                .setColor("Red")
+                .setTitle("❌ Unsupported File")
+                .setDescription("Only **.lua** and **.txt** files are supported.")]
+            });
           }
 
           inputFile = path.join(tempDir, `input_${Date.now()}${ext}`);
-          const response = await axios({ method: "GET", url: attachment.url, responseType: "stream" });
-          response.data.pipe(fs.createWriteStream(inputFile));
-          await new Promise((resolve, reject) => {
-            response.data.on("end", resolve);
-            response.data.on("error", reject);
-          });
           originalFileName = attachment.name;
-        } else {
-          // FIX: The regular expression is now correct and complete.
-          // It captures the content inside a standard Discord code block.
-          const codeBlockMatch = msg.content.match(/```(?:lua)?\n([\s\S]*?)```/i); 
-          
-          if (!codeBlockMatch) {
-            const errorEmbed = new MessageEmbed()
-              .setColor("RED")
-              .setTitle("❌ Obfuscation Failed")
-              .setDescription("You must attach a **`.lua`** or **`.txt`** file OR paste your code inside a valid **code block** (` ```lua code ``` `) to use `.obf`!\nWe apologize for the inconvenience. 🙏");
-            msg.reply({ embeds: [errorEmbed] });
-            return;
-          }
 
-          const code = codeBlockMatch[1];
-          inputFile = path.join(tempDir, `input_${Date.now()}.lua`);
-          fs.writeFileSync(inputFile, code, "utf-8");
-          originalFileName = `codeblock_${Date.now()}.lua`;
+          const response = await axios({ url: attachment.url, method: "GET", responseType: "stream" });
+          response.data.pipe(fs.createWriteStream(inputFile));
+
+          await new Promise((res, rej) => {
+            response.data.on("end", res);
+            response.data.on("error", rej);
+          });
         }
 
-        // Ask for level
-        const chooseEmbed = new MessageEmbed()
-          .setColor("PURPLE")
-          .setTitle("🔐 Choose Obfuscation Level")
-          .setDescription("Please select the obfuscation level:\nSelect wisely for the best protection! 🧐");
+        /* ---------- CODEBLOCK SUPPORT ---------- */
+        else {
+          const match = msg.content.match(/```(?:lua)?\n([\s\S]*?)```/i);
+          if (!match) {
+            return msg.reply({
+              embeds: [new EmbedBuilder()
+                .setColor("Red")
+                .setTitle("❌ No Code Provided")
+                .setDescription("Attach a file or provide code inside a ```lua codeblock ```")]
+            });
+          }
 
-        const row = new MessageActionRow().addComponents(
-          new MessageSelectMenu()
+          const code = match[1];
+          inputFile = path.join(tempDir, `input_${Date.now()}.lua`);
+          originalFileName = `code_${Date.now()}.lua`;
+          fs.writeFileSync(inputFile, code, "utf-8");
+        }
+
+        /* ---------- LEVEL SELECTOR ---------- */
+        const chooseEmbed = new EmbedBuilder()
+          .setColor("Purple")
+          .setTitle("🔐 Choose Obfuscation Level")
+          .setDescription("Select obfuscation strength below:");
+
+        const row = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
             .setCustomId(`obfuscation_level_${Date.now()}`)
-            .setPlaceholder("🛡️ Select Obfuscation Level")
+            .setPlaceholder("Select Level")
             .addOptions([
-              { label: "Weak", description: "Weak Obfuscation Level 🪶", value: "Weak" },
-              { label: "Medium", description: "Medium Obfuscation Level 🛡️", value: "Medium" },
-              { label: "Strong", description: "Strong Obfuscation Level 💪", value: "Strong" },
+              { label: "Weak", value: "Weak" },
+              { label: "Medium", value: "Medium" },
+              { label: "Strong", value: "Strong" },
             ])
         );
 
-        const promptMsg = await msg.reply({ embeds: [chooseEmbed], components: [row] });
+        const prompt = await msg.reply({ embeds: [chooseEmbed], components: [row] });
 
-        const filter = (i) => i.user.id === msg.author.id;
-        const collector = promptMsg.createMessageComponentCollector({
-          filter,
-          componentType: "SELECT_MENU",
+        const collector = prompt.createMessageComponentCollector({
           time: 60000,
+          filter: (i) => i.user.id === msg.author.id
         });
 
-        collector.on("collect", async (i) => {
-          await i.deferUpdate();
-          const selected = i.values[0];
+        collector.on("collect", async (interaction) => {
+          await interaction.deferUpdate();
           collector.stop();
 
+          const level = interaction.values[0];
+          const preset = level === "Strong" ? "Medium" : level;
+
           let outputFile;
+
           try {
-            // Note: If 'Strong' is not a valid preset for your luajit,
-            // this maps 'Strong' selection to 'Medium'. Adjust as needed.
-            const presetToUse = selected === "Strong" ? "Medium" : selected; 
-            outputFile = await obfuscate(inputFile, presetToUse);
+            outputFile = await obfuscate(inputFile, preset);
           } catch (err) {
-            error("Obfuscation execution failed:", err);
-            await msg.reply("❌ Failed to obfuscate the script. An internal error occurred during processing.");
+            error(err);
             cleanup();
-            return;
+            return msg.reply("❌ Failed to obfuscate the script.");
           }
 
-          const obfuscatedCode = fs.readFileSync(outputFile, "utf-8");
-          const watermark = `--[[
+          const obfuscated = fs.readFileSync(outputFile, "utf-8");
+          const finalText = `--[[ Nyx Obfuscator ]]--\n\n${obfuscated}`;
+          const finalFilePath = path.join(tempDir, `final_${Date.now()}.lua`);
+          fs.writeFileSync(finalFilePath, finalText);
 
-Nyx Obfuscator
-
-This Script Was Obfuscated Using Nyx Obfuscator Made for Omega Hub!
-
-]]\n\n`;
-          const finalCode = watermark + obfuscatedCode;
-
-          const finalFile = path.join(tempDir, `obfuscated_final_${Date.now()}.lua`);
-          fs.writeFileSync(finalFile, finalCode, "utf-8");
-
-          // Upload to storage
-          let fileUrl;
+          /* ---------- UPLOAD TO STORAGE ---------- */
+          let url;
           try {
-            const storageChannel = await ensureStorageChannel(client);
-            const storageMsg = await storageChannel.send({
-              files: [new MessageAttachment(finalFile, originalFileName)],
+            const channel = await ensureStorageChannel(client);
+            const storageMsg = await channel.send({
+              files: [new AttachmentBuilder(finalFilePath, { name: originalFileName })]
             });
-            fileUrl = storageMsg.attachments.first()?.url;
-          } catch (e) {
-            error("Storage upload failed:", e);
-            await msg.reply("❌ Storage channel misconfigured. Set `STORAGE_CHANNEL_ID` in your `.env` and ensure the bot can send there.");
+
+            url = storageMsg.attachments.first().url;
+
+          } catch (err) {
+            error(err);
             cleanup();
-            return;
+            return msg.reply("❌ Storage channel not configured.");
           }
-          
-          const MAX_PREVIEW_LENGTH = 500;
-          const preview = finalCode.length > MAX_PREVIEW_LENGTH ? finalCode.slice(0, MAX_PREVIEW_LENGTH) + "..." : finalCode;
 
-          const successEmbed = new MessageEmbed()
-            .setColor("DARK_BLUE")
-            .setTitle("Obfuscation Results")
-            .setDescription(`**File:** ${originalFileName}\n[ **Click here to download** ](${fileUrl})\n\n\`\`\`lua\n${preview}\n\`\`\``)
-            .setFooter({ text: "Made by Slayerson • Credits to Vyxonq • Powered by Nyx Obfuscator" });
+          /* ---------- SUCCESS EMBED ---------- */
+          const resultEmbed = new EmbedBuilder()
+            .setColor("Blue")
+            .setTitle("Obfuscation Complete")
+            .setDescription(
+`**File:** ${originalFileName}  
+[Click to Download](${url})`
+            )
+            .addFields({
+              name: "Preview",
+              value: "```lua\n" + finalText.slice(0, 500) + "...\n```"
+            })
+            .setFooter({ text: "Made by Slayerson • Powered by Nyx Obfuscator" });
 
-          await msg.reply({ embeds: [successEmbed] });
+          await msg.reply({ embeds: [resultEmbed] });
 
-          try { await promptMsg.delete(); } catch {}
           cleanup();
+          try { await prompt.delete(); } catch {}
         });
 
-        collector.on("end", collected => { 
+        collector.on("end", (collected) => {
           if (collected.size === 0) {
-            const cancelEmbed = new MessageEmbed()
-              .setColor("RED")
-              .setTitle("❌ Obfuscation Canceled")
-              .setDescription("No selection made in time. Please try again.");
-            msg.reply({ embeds: [cancelEmbed] });
+            msg.reply("⌛ Timed out — please run `.obf` again.");
             cleanup();
           }
         });
-      } catch (e) {
-        error("An unexpected error occurred during message processing:", e);
+
+      } catch (err) {
+        error(err);
         cleanup();
-        msg.reply("❌ An unexpected error occurred. Please check the console logs.").catch(() => {});
+        msg.reply("❌ An unexpected error occurred.");
       }
     }
   });
 }
 
-// Launch all bots
-tokens.forEach((token, index) => createBot(token, index + 1));
+/* ----------------------- Launch Bots ----------------------- */
+tokens.forEach((token, i) => createBot(token, i + 1));
+
+
