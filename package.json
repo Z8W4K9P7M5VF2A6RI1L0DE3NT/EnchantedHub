@@ -1,0 +1,35 @@
+{
+  "name": "lua-obfuscator-service",
+  "version": "1.0.0",
+  "description": "Discord bot and web API for a Lua obfuscation service.",
+  "main": "bot.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:web\" \"npm run start:bot\"",
+    "start:web": "node server.js",
+    "start:bot": "node bot.js",
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:bot\"",
+    "dev:web": "nodemon server.js",
+    "dev:bot": "nodemon bot.js"
+  },
+  "keywords": [
+    "discord",
+    "lua",
+    "obfuscator",
+    "node"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    **"axios": "^1.6.8",** // <--- ADD THIS LINE
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
