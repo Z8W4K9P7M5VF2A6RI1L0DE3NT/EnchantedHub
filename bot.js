@@ -1,7 +1,14 @@
-const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
-const { spawn } = require('child_process'); // No longer used for obfuscation, but needed for the module structure
-const fs = require('fs');
-const path = require('path');
+const { 
+    Client, 
+    GatewayIntentBits, 
+    Partials, 
+    Collection, 
+    AttachmentBuilder, 
+    REST, 
+    Routes,
+    SlashCommandBuilder, 
+} = require('discord.js');
+const fetch = require('node-fetch'); 
 
 // Ensure Discord token is available from the environment variables set on Render
 if (!process.env.DISCORD_TOKEN) {
@@ -12,8 +19,6 @@ if (!process.env.DISCORD_TOKEN) {
 // --- CONFIGURATION ---
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = '1444160895872663615'; 
-// The bot will now call the API endpoint running on the same server.
-// RENDER_EXTERNAL_URL is available in the Node.js environment on Render.
 const API_BASE_URL = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'; 
 const OBFUSCATE_ENDPOINT = `${API_BASE_URL}/obfuscate`; 
 
@@ -21,15 +26,12 @@ const OBFUSCATE_ENDPOINT = `${API_BASE_URL}/obfuscate`;
 // --- CLIENT SETUP ---
 const client = new Client({
     intents: [
+        // Only need Guilds for slash commands
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
     ],
     partials: [Partials.Channel],
 });
 
-client.commands = new Collection();
 client.once('clientReady', () => { 
     console.log(`[BOT] Logged in as ${client.user.tag}!`);
     registerSlashCommands();
@@ -38,21 +40,24 @@ client.once('clientReady', () => {
 // --- COMMAND HANDLER ---
 
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
+    if (!interaction.isChatInputCommand()) return;
 
     // --- /obf COMMAND ---
     if (interaction.commandName === 'obf') {
-        // Initial reply is private (ephemeral)
-        await interaction.reply({ content: 'Processing file for obfuscation via API... This message is private.', ephemeral: true });
+        
+        // 1. Initial Reply: PRIVATE confirmation (ephemeral: true)
+        // This confirms the file is received and is the "read-only" status.
+        await interaction.reply({ 
+            content: 'Processing file for obfuscation via API... This confirmation is private.', 
+            ephemeral: true 
+        });
 
         const attachment = interaction.options.getAttachment('file'); 
         const fileName = attachment?.name.toLowerCase();
 
-        // 1. VALIDATION: Accept both .lua and .txt
-        if (
-            !attachment || 
-            (!fileName.endsWith('.lua') && !fileName.endsWith('.txt'))
-        ) {
+        // 2. VALIDATION: Accept both .lua and .txt
+        if (!fileName || (!fileName.endsWith('.lua') && !fileName.endsWith('.txt'))) {
+            // If validation fails, edit the existing private reply with the error
             return interaction.editReply({ 
                 content: '❌ Error: Please upload a valid script file ending with either `.lua` or `.txt`.',
                 ephemeral: true 
@@ -60,13 +65,13 @@ client.on('interactionCreate', async interaction => {
         }
         
         try {
-            // 2. Download the file content
+            // 3. Download the file content
             const response = await fetch(attachment.url);
             if (!response.ok) throw new Error(`Failed to download file: ${response.statusText}`);
             
             const rawLuaCode = await response.text();
             
-            // 3. NEW: Call the local API endpoint for obfuscation
+            // 4. Call the local API endpoint for obfuscation
             const apiResponse = await fetch(OBFUSCATE_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -85,39 +90,49 @@ client.on('interactionCreate', async interaction => {
             const result = await apiResponse.json();
             const obfuscatedCode = result.obfuscatedCode;
             
-            // 4. Determine the output file name, ensuring it always ends in .lua
+            // 5. Determine the output file name, ensuring it always ends in .lua
             let outputFileName = attachment.name;
             if (outputFileName.toLowerCase().endsWith('.txt')) {
                 outputFileName = outputFileName.slice(0, -4) + '.lua';
             }
 
-            // 5. Send success reply with the obfuscated file (STILL PRIVATE)
+            // 6. Create the public file attachment
             const obfBuffer = Buffer.from(obfuscatedCode, 'utf8');
             const attachmentToSend = new AttachmentBuilder(obfBuffer, { name: `obfuscated_${outputFileName}` });
             
-            await interaction.editReply({
-                content: '✅ Obfuscation successful! Your private obfuscated file is attached below.',
+            
+            // --- STEP 7: Delete the initial PRIVATE reply ---
+            // This is the message that will be deleted after being "replied" to
+            await interaction.deleteReply().catch(err => console.error('Error deleting private reply:', err));
+
+            // --- STEP 8: Send the final PUBLIC reply that targets the original command message ---
+            const userPing = `<@${interaction.user.id}>`; // Pings the user
+            
+            await interaction.channel.send({
+                content: `${userPing} ✅ Obfuscation successful! The output file is attached below.`,
                 files: [attachmentToSend],
-                ephemeral: true
+                // This makes the new public message look like a reply to the original command message
+                messageReference: interaction.id, 
+                failIfNotExists: false 
             });
 
         } catch (error) {
-            console.error(`Obfuscation Error for ${interaction.id}:`, error.message);
+            console.error(`Obfuscation Error:`, error.message);
             
             let errorMessage;
             
-            // Check for API-reported syntax error (will be passed through error.message)
+            // Check for API-reported syntax error
             if (error.message.includes('Invalid Lua syntax')) {
                  errorMessage = '❌ Error: Invalid Lua syntax. Please check your code.';
             } else {
-                 errorMessage = `❌ Error: ${error.message}. Please try again.`;
+                 errorMessage = '❌ Error: An internal processing error occurred. Please try again or contact a bot administrator.';
             }
 
-            // Send failure message (STILL PRIVATE)
+            // If we fail, we edit the existing private reply with the error message (keeping the error private)
             await interaction.editReply({ 
                 content: errorMessage,
                 ephemeral: true 
-            });
+            }).catch(err => console.error('Error editing private reply during failure:', err));
         }
     }
 });
@@ -126,18 +141,15 @@ client.on('interactionCreate', async interaction => {
 
 // Define the slash command structure
 const commands = [
-    {
-        name: 'obf',
-        description: 'Uploads a Lua script for private obfuscation (accepts .lua and .txt).',
-        options: [
-            {
-                name: 'file',
-                description: 'The .lua or .txt file containing the script.',
-                type: 11, // ApplicationCommandOptionType.Attachment
-                required: true,
-            },
-        ],
-    },
+    new SlashCommandBuilder()
+        .setName('obf')
+        .setDescription('Uploads a Lua script for obfuscation (accepts .lua and .txt).')
+        .addAttachmentOption(option => 
+            option.setName('file')
+                  .setDescription('The .lua or .txt file containing the script.')
+                  .setRequired(true)
+        )
+        .toJSON()
 ];
 
 // Function to register the slash commands with Discord
@@ -145,7 +157,6 @@ async function registerSlashCommands() {
     try {
         const rest = new REST({ version: '10' }).setToken(TOKEN);
         
-        // Registering commands globally using your specific CLIENT_ID
         await rest.put(
             Routes.applicationCommands(CLIENT_ID),
             { body: commands },
