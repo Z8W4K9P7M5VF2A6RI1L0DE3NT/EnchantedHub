@@ -2,13 +2,14 @@ const {
     Client, 
     GatewayIntentBits, 
     Partials, 
-    Collection, 
     AttachmentBuilder, 
     REST, 
     Routes,
     SlashCommandBuilder, 
 } = require('discord.js');
-const fetch = require('node-fetch'); 
+const fetch = require('node-fetch'); // Still needed to download the file from Discord CDN
+// --- IMPORTANT: Import the obfuscation function directly from obfuscator.js ---
+const { runObfuscator } = require('./obfuscator'); 
 
 // Ensure Discord token is available from the environment variables set on Render
 if (!process.env.DISCORD_TOKEN) {
@@ -19,15 +20,13 @@ if (!process.env.DISCORD_TOKEN) {
 // --- CONFIGURATION ---
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = '1444160895872663615'; 
-const API_BASE_URL = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'; 
-const OBFUSCATE_ENDPOINT = `${API_BASE_URL}/obfuscate`; 
 
 
 // --- CLIENT SETUP ---
 const client = new Client({
     intents: [
         // Only need Guilds for slash commands
-        GatewayIntentBits.Guilds,
+        GatewayIntentIntentBits.Guilds,
     ],
     partials: [Partials.Channel],
 });
@@ -46,9 +45,8 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'obf') {
         
         // 1. Initial Reply: PRIVATE confirmation (ephemeral: true)
-        // This confirms the file is received and is the "read-only" status.
         await interaction.reply({ 
-            content: 'Processing file for obfuscation via API... This confirmation is private.', 
+            content: 'Processing file for obfuscation...', 
             ephemeral: true 
         });
 
@@ -71,24 +69,8 @@ client.on('interactionCreate', async interaction => {
             
             const rawLuaCode = await response.text();
             
-            // 4. Call the local API endpoint for obfuscation
-            const apiResponse = await fetch(OBFUSCATE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    code: rawLuaCode, 
-                    fileName: attachment.name 
-                }),
-            });
-
-            // Check API response status
-            if (!apiResponse.ok) {
-                const errorData = await apiResponse.json().catch(() => ({ message: 'API responded with an error status.' }));
-                throw new Error(errorData.message || 'API responded with an error.');
-            }
-
-            const result = await apiResponse.json();
-            const obfuscatedCode = result.obfuscatedCode;
+            // 4. --- RUN OBFUSCATOR DIRECTLY (from obfuscator.js) ---
+            const obfuscatedCode = await runObfuscator(rawLuaCode, 'Medium');
             
             // 5. Determine the output file name, ensuring it always ends in .lua
             let outputFileName = attachment.name;
@@ -102,16 +84,15 @@ client.on('interactionCreate', async interaction => {
             
             
             // --- STEP 7: Delete the initial PRIVATE reply ---
-            // This is the message that will be deleted after being "replied" to
             await interaction.deleteReply().catch(err => console.error('Error deleting private reply:', err));
 
             // --- STEP 8: Send the final PUBLIC reply that targets the original command message ---
-            const userPing = `<@${interaction.user.id}>`; // Pings the user
+            const userPing = `<@${interaction.user.id}>`; 
             
             await interaction.channel.send({
                 content: `${userPing} ✅ Obfuscation successful! The output file is attached below.`,
                 files: [attachmentToSend],
-                // This makes the new public message look like a reply to the original command message
+                // Visually replies to the original command message
                 messageReference: interaction.id, 
                 failIfNotExists: false 
             });
@@ -121,7 +102,7 @@ client.on('interactionCreate', async interaction => {
             
             let errorMessage;
             
-            // Check for API-reported syntax error
+            // Check for the specific syntax error thrown by obfuscator.js
             if (error.message.includes('Invalid Lua syntax')) {
                  errorMessage = '❌ Error: Invalid Lua syntax. Please check your code.';
             } else {
