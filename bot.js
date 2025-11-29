@@ -1,7 +1,6 @@
-// bot.js
 const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
-const fetch = require('node-fetch'); // To download the file from Discord's CDN
-const { runObfuscator } = require('./obfuscator'); // Import the shared logic
+const fetch = require('node-fetch');
+const { runObfuscator } = require('./obfuscator');
 require('dotenv').config();
 
 // --- Configuration ---
@@ -9,7 +8,7 @@ const MAX_FILE_SIZE_MB = 8;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const DEFAULT_PRESET = 'Medium';
 const LUA_EXTENSION = '.lua';
-
+const TXT_EXTENSION = '.txt';
 
 // Initialize Discord Client (needs Guilds and MessageContent intents)
 const client = new Client({ 
@@ -27,15 +26,13 @@ client.on('ready', async () => {
     // Define the /obf slash command
     const obfCommand = new SlashCommandBuilder()
         .setName('obf')
-        .setDescription(`Obfuscates an attached Lua script using the ${DEFAULT_PRESET} preset.`)
-        // Add an attachment option
+        .setDescription(`Obfuscates an attached .lua or .txt script (Output is .txt).`)
         .addAttachmentOption(option => 
             option.setName('script')
-                  .setDescription('The .lua file to obfuscate.')
+                  .setDescription('The .lua or .txt file containing the Lua code.')
                   .setRequired(true)
         );
 
-    // Register the slash command (globally)
     try {
         await client.application.commands.create(obfCommand);
         console.log('[BOT] Registered /obf slash command.');
@@ -50,22 +47,24 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'obf') {
-        // Defer the reply to give the obfuscation process time
         await interaction.deferReply({ ephemeral: false }); 
 
-        // Get the attachment named 'script'
         const attachment = interaction.options.getAttachment('script'); 
-        const preset = DEFAULT_PRESET; // Hardcoded to 'Medium'
+        const preset = DEFAULT_PRESET; 
+        
+        const fileName = attachment.name;
+        const lowerCaseFileName = fileName.toLowerCase();
 
-        // 1. Validation
-        if (!attachment.name.endsWith(LUA_EXTENSION) || attachment.size > MAX_FILE_SIZE_BYTES) {
-            return interaction.editReply(`❌ Please attach a valid Lua file (must end with ${LUA_EXTENSION} and be under ${MAX_FILE_SIZE_MB}MB).`);
+        // 1. Validation: Accepts .lua OR .txt
+        const isLuaOrTxt = lowerCaseFileName.endsWith(LUA_EXTENSION) || lowerCaseFileName.endsWith(TXT_EXTENSION);
+
+        if (!isLuaOrTxt || attachment.size > MAX_FILE_SIZE_BYTES) { 
+            return interaction.editReply(`❌ Please attach a valid Lua script file. We accept **.lua** or **.txt** inputs, but the size must be under **${MAX_FILE_SIZE_MB}MB**.`);
         }
         
         try {
             // 2. Download the attached file content
             const response = await fetch(attachment.url);
-            // Check if the response is readable/successful
             if (!response.ok) {
                  return interaction.editReply('❌ Failed to download script from Discord. Please try again.');
             }
@@ -74,14 +73,26 @@ client.on('interactionCreate', async (interaction) => {
             // 3. Run the core obfuscation logic
             const obfuscatedCode = await runObfuscator(rawLuaCode, preset); 
 
-            // 4. Send the result back as a file attachment
+            // 4. Determine the base file name and force .txt output
+            let baseName = fileName;
+            
+            // Remove existing extension (case-insensitive)
+            if (lowerCaseFileName.endsWith(LUA_EXTENSION)) {
+                baseName = fileName.slice(0, -LUA_EXTENSION.length);
+            } else if (lowerCaseFileName.endsWith(TXT_EXTENSION)) {
+                baseName = fileName.slice(0, -TXT_EXTENSION.length);
+            }
+            
+            // Append the desired .txt extension
+            const outputFileName = `${baseName}${TXT_EXTENSION}`;
+            
             const obfBuffer = Buffer.from(obfuscatedCode, 'utf8');
             const obfFile = new AttachmentBuilder(obfBuffer, { 
-                name: `obfuscated_${attachment.name}` 
+                name: `obfuscated_${outputFileName}` 
             });
 
             await interaction.editReply({ 
-                content: `✅ **Obfuscation Complete** (Preset: ${preset})!`, 
+                content: `✅ **Obfuscation Complete** (Preset: ${preset})! Your output file is **.txt** format.`, 
                 files: [obfFile] 
             });
 
