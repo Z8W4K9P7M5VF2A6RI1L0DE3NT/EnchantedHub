@@ -1,5 +1,4 @@
-
-
+// bot.js
 require("dotenv").config();
 const {
   Client,
@@ -13,12 +12,15 @@ const {
 
 const axios = require("axios");
 const fs = require("fs");
-const child_process = require("child_process");
 const path = require("path");
 
 /* ----------------------- Logging ----------------------- */
 const log = (...e) => console.log("[PROMETHEUS]", ...e);
 const error = (...e) => console.error("[PROMETHEUS]", ...e);
+
+/* ----------------------- Config ----------------------- */
+// Remote obfuscation endpoint (server must accept { code: "<lua>" })
+const API_URL = process.env.OBFUSCATE_API_URL || "https://novahub-zd14.onrender.com/obfuscate";
 
 /* ----------------------- Temp Folder ----------------------- */
 const tempDir = path.join(__dirname, "Temp_files");
@@ -29,7 +31,6 @@ if (!fs.existsSync(tempDir)) {
 
 /* ----------------------- Storage Channel ----------------------- */
 const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || process.env.CDN_STORAGE_CHANNEL_ID;
-
 async function ensureStorageChannel(client) {
   if (!STORAGE_CHANNEL_ID) throw new Error("STORAGE_CHANNEL_ID not set in .env");
   let ch = client.channels.cache.get(STORAGE_CHANNEL_ID);
@@ -38,38 +39,42 @@ async function ensureStorageChannel(client) {
   return ch;
 }
 
-/* ----------------------- Obfuscation Process ----------------------- */
-function obfuscate(inputFile, preset) {
-  return new Promise((resolve, reject) => {
-    const outputFile = path.join(tempDir, `obfuscated_${Date.now()}.lua`);
-
-    const proc = child_process.spawn("./bin/luajit.exe", [
-      "./lua/cli.lua",
-      "--preset",
-      preset,
-      inputFile,
-      "--out",
-      outputFile,
-    ]);
-
-    let stderr = "";
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-
-    proc.on("close", (code) => {
-      if (code !== 0) return reject(stderr || `luajit exited with code ${code}`);
-      resolve(outputFile);
+/* ----------------------- Remote Obfuscation ----------------------- */
+/**
+ * Sends the raw Lua code to the remote /obfuscate endpoint.
+ * Returns the obfuscated code string or throws on error.
+ */
+async function obfuscateRemote(rawLua, preset = "Medium") {
+  try {
+    // Your server currently ignores preset param, but we'll send it anyway
+    const resp = await axios.post(API_URL, { code: rawLua, preset }, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 120000 // 2 minutes
     });
 
-    proc.on("error", (err) => {
-      reject(`Failed to start luajit.exe: ${err.message}`);
-    });
-  });
+    if (resp?.data?.obfuscatedCode) {
+      return resp.data.obfuscatedCode;
+    } else {
+      throw new Error("Invalid response from obfuscation server.");
+    }
+  } catch (err) {
+    // Normalize axios errors
+    if (err.response) {
+      // server returned non-2xx
+      throw new Error(`Obfuscation server error: ${err.response.status} ${err.response.statusText}`);
+    } else if (err.request) {
+      throw new Error("No response from obfuscation server.");
+    } else {
+      throw new Error(`Obfuscation request failed: ${err.message}`);
+    }
+  }
 }
 
 /* ----------------------- Tokens ----------------------- */
 const tokens = Object.keys(process.env)
   .filter((key) => key.startsWith("DISCORD_TOKEN"))
-  .map((key) => process.env[key]);
+  .map((key) => process.env[key])
+  .filter(Boolean);
 
 if (tokens.length === 0) {
   error("❌ No DISCORD_TOKEN found in .env");
@@ -91,14 +96,15 @@ function createBot(token, botNumber) {
   /* ----------------------- Bot Ready ----------------------- */
   client.once("ready", () => {
     log(`✅ Bot #${botNumber} logged in as ${client.user.tag}`);
-
     client.user.setPresence({
       status: "dnd",
       activities: [{ name: "Obfuscating Nyx Files", type: 0 }]
     });
   });
 
-  client.login(token);
+  client.login(token).catch(err => {
+    error("Login failed for bot", botNumber, err);
+  });
 
   /* ----------------------- Message Handler ----------------------- */
   client.on("messageCreate", async (msg) => {
@@ -127,9 +133,10 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
     if (msg.content.toLowerCase().startsWith(".obf")) {
       let inputFile;
       let originalFileName;
+      let rawLua = "";
 
       const cleanup = () => {
-        try { fs.unlinkSync(inputFile); } catch {}
+        try { if (inputFile && fs.existsSync(inputFile)) fs.unlinkSync(inputFile); } catch {}
       };
 
       try {
@@ -149,13 +156,17 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
           inputFile = path.join(tempDir, `input_${Date.now()}${ext}`);
           originalFileName = attachment.name;
 
-          const response = await axios({ url: attachment.url, method: "GET", responseType: "stream" });
-          response.data.pipe(fs.createWriteStream(inputFile));
-
+          // download attachment
+          const response = await axios({ url: attachment.url, method: "GET", responseType: "stream", timeout: 120000 });
+          const writer = fs.createWriteStream(inputFile);
+          response.data.pipe(writer);
           await new Promise((res, rej) => {
-            response.data.on("end", res);
+            writer.on("finish", res);
+            writer.on("error", rej);
             response.data.on("error", rej);
           });
+
+          rawLua = fs.readFileSync(inputFile, "utf8");
         }
 
         /* ---------- CODEBLOCK SUPPORT ---------- */
@@ -170,10 +181,10 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
             });
           }
 
-          const code = match[1];
+          rawLua = match[1];
           inputFile = path.join(tempDir, `input_${Date.now()}.lua`);
           originalFileName = `code_${Date.now()}.lua`;
-          fs.writeFileSync(inputFile, code, "utf-8");
+          fs.writeFileSync(inputFile, rawLua, "utf8");
         }
 
         /* ---------- LEVEL SELECTOR ---------- */
@@ -205,22 +216,28 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
           collector.stop();
 
           const level = interaction.values[0];
+          // Your server's preset mapping; adjust if server expects something else
           const preset = level === "Strong" ? "Medium" : level;
 
-          let outputFile;
-
+          let obfuscatedCode;
           try {
-            outputFile = await obfuscate(inputFile, preset);
+            // Call remote obfuscation endpoint with raw code
+            obfuscatedCode = await obfuscateRemote(rawLua, preset);
           } catch (err) {
-            error(err);
+            error("Remote obfuscation failed:", err);
             cleanup();
-            return msg.reply("❌ Failed to obfuscate the script.");
+            return msg.reply({
+              embeds: [new EmbedBuilder()
+                .setColor("Red")
+                .setTitle("❌ Failed to obfuscate")
+                .setDescription("The obfuscation server returned an error. Try again later.")]
+            });
           }
 
-          const obfuscated = fs.readFileSync(outputFile, "utf-8");
-          const finalText = `--[[ Nyx Obfuscator ]]--\n\n${obfuscated}`;
+          // Prepare final file content and save
+          const finalText = `--[[ Nyx Obfuscator ]]--\n\n${obfuscatedCode}`;
           const finalFilePath = path.join(tempDir, `final_${Date.now()}.lua`);
-          fs.writeFileSync(finalFilePath, finalText);
+          fs.writeFileSync(finalFilePath, finalText, "utf8");
 
           /* ---------- UPLOAD TO STORAGE ---------- */
           let url;
@@ -233,9 +250,14 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
             url = storageMsg.attachments.first().url;
 
           } catch (err) {
-            error(err);
+            error("Storage upload failed:", err);
             cleanup();
-            return msg.reply("❌ Storage channel not configured.");
+            return msg.reply({
+              embeds: [new EmbedBuilder()
+                .setColor("Red")
+                .setTitle("❌ Storage upload failed")
+                .setDescription("Storage channel not configured or missing permissions.")]
+            });
           }
 
           /* ---------- SUCCESS EMBED ---------- */
@@ -248,27 +270,36 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
             )
             .addFields({
               name: "Preview",
-              value: "```lua\n" + finalText.slice(0, 500) + "...\n```"
+              value: "```lua\n" + finalText.slice(0, 500) + (finalText.length > 500 ? "...\n```" : "\n```")
             })
             .setFooter({ text: "Made by Slayerson • Powered by Nyx Obfuscator" });
 
           await msg.reply({ embeds: [resultEmbed] });
 
+          // Cleanup
+          try { fs.unlinkSync(finalFilePath); } catch {}
           cleanup();
           try { await prompt.delete(); } catch {}
         });
 
         collector.on("end", (collected) => {
           if (collected.size === 0) {
-            msg.reply("⌛ Timed out — please run `.obf` again.");
+            try { msg.reply("⌛ Timed out — please run `.obf` again."); } catch {}
             cleanup();
           }
         });
 
       } catch (err) {
-        error(err);
+        error("Unexpected error in .obf handler:", err);
         cleanup();
-        msg.reply("❌ An unexpected error occurred.");
+        try {
+          await msg.reply({
+            embeds: [new EmbedBuilder()
+              .setColor("Red")
+              .setTitle("❌ An unexpected error occurred.")
+              .setDescription("Check logs for details.")]
+          });
+        } catch {}
       }
     }
   });
@@ -276,5 +307,3 @@ Attach a **.lua**, **.txt** file or paste code inside a \`\`\`lua codeblock \`\`
 
 /* ----------------------- Launch Bots ----------------------- */
 tokens.forEach((token, i) => createBot(token, i + 1));
-
-
