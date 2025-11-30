@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const crypto = require('crypto');
 const { Pool } = require('pg');
@@ -6,10 +7,10 @@ const cors = require('cors');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const axios = require("axios");   // ⭐ REQUIRED for AST reverse-proxy
+const axios = require("axios");
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 /* ---------------- Payload Config ---------------- */
 app.use(express.json({ limit: '100mb' }));
@@ -45,7 +46,7 @@ pool.connect((err, client, done) => {
 /* ---------------- Constants ---------------- */
 const WATERMARK = "-- </> This file has been secured using Nova Hub Protection\n\n";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw script. Check your Lua syntax. ]] ";
-const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua');
+const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua'); // ensure your obfuscator exists
 
 /* ---------------- Helper Functions ---------------- */
 const generateId = () => crypto.randomBytes(16).toString("hex");
@@ -68,11 +69,11 @@ async function runObfuscator(rawLua, preset = "Medium") {
         const command = `lua ${SCRIPT_LUA_PATH} --preset ${preset} --out ${outputFile} ${tempFile}`;
 
         await new Promise(resolve => {
-            exec(command, (error, stdout, stderr) => {
+            exec(command, { timeout: 15000 }, (error, stdout, stderr) => {
                 try { fs.unlinkSync(tempFile); } catch {}
 
-                if (error) {
-                    console.error("Lua execution error:", error);
+                if (error || stderr) {
+                    console.error("Lua execution error:", error || stderr);
                     finalCode = applyFallback(rawLua);
                     return resolve();
                 }
@@ -105,11 +106,11 @@ async function runObfuscator(rawLua, preset = "Medium") {
        MAIN OBFUSCATION ENDPOINT — /obfuscate
 ======================================================== */
 app.post('/obfuscate', async (req, res) => {
-    const rawLuaCode = req.body.code;
+    const rawLuaCode = req.body.code || req.body.script;
     const preset = req.body.preset || "Medium";
 
     if (!rawLuaCode || typeof rawLuaCode !== "string") {
-        return res.status(400).json({ error: 'A "code" field containing Lua script is required.' });
+        return res.status(400).json({ error: 'A "code" (or "script") field containing Lua script is required.' });
     }
 
     const result = await runObfuscator(rawLuaCode, preset);
@@ -130,12 +131,13 @@ app.post('/obfuscate', async (req, res) => {
 
 /* =======================================================
    OBFUSCATE + STORE INTO DATABASE
+   expects { script: "<lua>" }
 ======================================================== */
 app.post("/obfuscate-and-store", async (req, res) => {
-    const raw = req.body.script;
+    const raw = req.body.script || req.body.code;
 
     if (!raw)
-        return res.status(400).json({ error: "Missing 'script' in request body." });
+        return res.status(400).json({ error: "Missing 'script' (or 'code') in request body." });
 
     const { success, code } = await runObfuscator(raw, "Medium");
 
@@ -149,7 +151,8 @@ app.post("/obfuscate-and-store", async (req, res) => {
 
         res.status(201).json({
             message: success ? "Obfuscation + storage complete." : "Stored, but obfuscation failed.",
-            key
+            key,
+            obfuscatedCode: code
         });
 
     } catch (err) {
