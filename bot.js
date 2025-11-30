@@ -1,4 +1,5 @@
 // bot.js
+// NovaHub Discord Bot - Full single-file implementation
 require('dotenv').config();
 
 const fs = require('fs');
@@ -18,17 +19,16 @@ const {
 
 const { Pool } = require('pg');
 
-////////////////////////////////////////////////////////////////////////////////
-// Config
-////////////////////////////////////////////////////////////////////////////////
-
+/* ============================
+   Configuration (from .env)
+   ============================ */
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_ID = process.env.OWNER_ID || '';
 const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || '';
-const LOG_WEBHOOK = process.env.LOG_WEBHOOK || '';
-const API_SECRET = process.env.API_SECRET || '';
+const LOG_WEBHOOK = process.env.LOG_WEBHOOK || ''; // optional webhook to log actions
+const API_SECRET = process.env.API_SECRET || ''; // optional secret for server API
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !DATABASE_URL) {
   console.error('Missing required env vars. Set DISCORD_TOKEN, CLIENT_ID, DATABASE_URL.');
@@ -43,20 +43,20 @@ const RETRIEVE_URL = (key) => `${API_BASE}/retrieve/${key}`;
 const TEMP_DIR = path.join(__dirname, 'Temp_files');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-const API_TIMEOUT = 120000; // 2 min
+const API_TIMEOUT = 120000; // 2 minutes
 const TOKEN_COST = 5;
 const DAILY_TOKENS = 15;
 const GIFT_MAX_PER_GIFT = 30;
 const GIFT_MAX_COUNT = 3;
 const GIFT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-////////////////////////////////////////////////////////////////////////////////
-// DB
-////////////////////////////////////////////////////////////////////////////////
-
+/* ============================
+   Postgres pool & DB init
+   ============================ */
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 async function initDb() {
+  // safe create tables if missing
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -77,15 +77,19 @@ async function initDb() {
     );
   `);
 
+  // scripts table may already exist for server, ensure it exists as well
   await pool.query(`
     CREATE TABLE IF NOT EXISTS scripts (
-      key TEXT PRIMARY KEY,
+      key VARCHAR(64) PRIMARY KEY,
       script TEXT NOT NULL,
       created_at BIGINT NOT NULL
     );
   `);
 }
 
+/* ============================
+   DB helper functions
+   ============================ */
 async function ensureUserRow(userId) {
   const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
   if (rows.length === 0) {
@@ -117,9 +121,10 @@ async function refreshTokensIfNeeded(userId) {
 }
 
 async function consumeTokens(userId, amount) {
+  // owner and whitelisted have infinite tokens
   if (String(userId) === String(OWNER_ID)) return true;
-  const user = await getUser(userId);
-  if (user.whitelisted) return true; // infinite tokens
+  const row = await getUser(userId);
+  if (row.whitelisted) return true;
   await refreshTokensIfNeeded(userId);
   const fresh = await getUser(userId);
   if (Number(fresh.tokens) < amount) return false;
@@ -152,10 +157,9 @@ async function logGift(giverId, receiverId, amount) {
   await pool.query('INSERT INTO gifts(giver, receiver, amount, created_at) VALUES($1,$2,$3,$4)', [giverId, receiverId, amount, Date.now()]);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// file helpers
-////////////////////////////////////////////////////////////////////////////////
-
+/* ============================
+   File helpers
+   ============================ */
 async function downloadAttachment(url, destPath) {
   const res = await axios({ url, method: 'GET', responseType: 'stream', timeout: API_TIMEOUT });
   const writer = fs.createWriteStream(destPath);
@@ -184,10 +188,9 @@ async function uploadToStorageChannel(client, filePath, fileName) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// Slash command registration
-////////////////////////////////////////////////////////////////////////////////
-
+/* ============================
+   Slash commands registration
+   ============================ */
 const commands = [
   new SlashCommandBuilder().setName('info').setDescription('Show usage and information about the bot.'),
   new SlashCommandBuilder().setName('verify').setDescription('Accept the rules to verify yourself.'),
@@ -231,10 +234,9 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
   }
 })();
 
-////////////////////////////////////////////////////////////////////////////////
-// Bot start
-////////////////////////////////////////////////////////////////////////////////
-
+/* ============================
+   Client init
+   ============================ */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel]
@@ -242,19 +244,29 @@ const client = new Client({
 
 client.once('ready', async () => {
   console.log('Bot ready:', client.user.tag);
-  try { await initDb(); console.log('DB initialized.'); } catch (e) { console.error('DB init error:', e); }
+  try {
+    await initDb();
+    console.log('DB initialized.');
+  } catch (e) {
+    console.error('DB init error:', e);
+  }
 });
 
+/* ============================
+   Interaction handler
+   ============================ */
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const cmd = interaction.commandName;
   const uid = interaction.user.id;
 
+  // ensure user row + refresh tokens
   await ensureUserRow(uid);
   await refreshTokensIfNeeded(uid);
   const userRow = await getUser(uid);
 
+  // collect code helper
   async function collectCode() {
     const attachment = interaction.options.getAttachment('file');
     if (attachment) {
@@ -277,7 +289,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   try {
-    // /info (public)
+    // /info - public (non-ephemeral)
     if (cmd === 'info') {
       const embed = new EmbedBuilder()
         .setTitle('NovaHub — Info (BETA)')
@@ -297,21 +309,21 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ embeds: [embed], ephemeral: false });
     }
 
-    // /verify
+    // /verify - ephemeral
     if (cmd === 'verify') {
       await setVerified(uid);
       try { if (LOG_WEBHOOK) await axios.post(LOG_WEBHOOK, { content: `User verified: <@${uid}>` }); } catch (e) {}
       return interaction.reply({ content: '✅ Verified. You can now use commands (if allowed).', ephemeral: true });
     }
 
-    // /view
+    // /view - ephemeral
     if (cmd === 'view') {
       const refreshed = await refreshTokensIfNeeded(uid);
       const display = (String(uid) === String(OWNER_ID) || userRow.whitelisted) ? '∞ (owner/whitelisted)' : `${refreshed}`;
       return interaction.reply({ content: `💠 You have **${display}** tokens. Tokens refresh every 24 hours.`, ephemeral: true });
     }
 
-    // /wl (owner public)
+    // /wl - owner only + public
     if (cmd === 'wl') {
       if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only owner can whitelist.', ephemeral: true });
       const target = interaction.options.getUser('user');
@@ -320,7 +332,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `✅ ${target.tag} has been whitelisted (infinite tokens).`, ephemeral: false });
     }
 
-    // /bl (owner public)
+    // /bl - owner only + public
     if (cmd === 'bl') {
       if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only owner can un-whitelist.', ephemeral: true });
       const target = interaction.options.getUser('user');
@@ -329,7 +341,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `✅ ${target.tag} has been removed from whitelist.`, ephemeral: false });
     }
 
-    // /gift
+    // /gift - owner or whitelisted
     if (cmd === 'gift') {
       const target = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
@@ -357,7 +369,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `🎁 Gifted **${amount}** tokens to ${target.tag}.`, ephemeral: false });
     }
 
-    // /clean_ast
+    // /clean_ast - ephemeral input, public output
     if (cmd === 'clean_ast') {
       await interaction.deferReply({ ephemeral: true });
       const payloadStr = interaction.options.getString('payload');
@@ -379,7 +391,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // /apiservice (whitelist only)
+    // /apiservice - whitelist only; ephemeral input, public output
     if (cmd === 'apiservice') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -387,10 +399,16 @@ client.on('interactionCreate', async (interaction) => {
       if (!verifiedRow.verified) return interaction.editReply({ content: '❌ You must run /verify first.' });
       if (!verifiedRow.whitelisted) return interaction.editReply({ content: '❌ This command requires whitelist access.' });
 
+      // Only charge tokens if not owner and not whitelisted (but whitelisted are infinite)
+      if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
+        const tokensNow = await refreshTokensIfNeeded(uid);
+        if (tokensNow < TOKEN_COST) return interaction.editReply({ content: `❌ Not enough tokens (${tokensNow}).` });
+      }
+
       let collected;
       try { collected = await collectCode(); } catch (e) { return interaction.editReply({ content: `❌ ${e.message}` }); }
 
-      // call obfuscate-and-store
+      // Call API: obfuscate-and-store. Server expects "script" field (we pass api_secret if present)
       let apiResp;
       try {
         apiResp = await axios.post(API_OBF_STORE, { script: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT });
@@ -402,17 +420,18 @@ client.on('interactionCreate', async (interaction) => {
       const key = apiResp?.data?.key;
       if (!key) return interaction.editReply({ content: '❌ API did not return a key.' });
 
+      // consume tokens for non-owner/non-whitelisted (owner & whitelisted infinite)
       if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
         const ok = await consumeTokens(uid, TOKEN_COST);
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens.' });
       }
 
-      // prepare public embed
+      // Build loader and public embed
       const loader = `return loadstring(game:HttpGet("${RETRIEVE_URL(key)}"))()`;
       const publicEmbed = new EmbedBuilder()
         .setTitle('🔐 NovaHub — File Stored')
         .setColor('Blurple')
-        .setDescription(`<@${uid}> your file was stored.`)
+        .setDescription(`<@${uid}> your file was processed and stored.`)
         .addFields(
           { name: 'Retrieve URL', value: RETRIEVE_URL(key) },
           { name: 'Loader (copyable)', value: '```lua\n' + loader + '\n```' },
@@ -420,7 +439,7 @@ client.on('interactionCreate', async (interaction) => {
         )
         .setFooter({ text: 'NovaHub' });
 
-      // if server returned obfuscated code, upload it to storage channel for a file link
+      // If the API returned obfuscated code, upload it to storage channel for a file link
       try {
         if (apiResp.data?.obfuscatedCode) {
           const tmpPath = path.join(TEMP_DIR, `obf_${Date.now()}.lua`);
@@ -429,13 +448,14 @@ client.on('interactionCreate', async (interaction) => {
           if (publicUrl) publicEmbed.addFields({ name: 'Download', value: publicUrl });
           cleanupFile(tmpPath);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) { /* ignore upload errors */ }
 
+      // Post public embed
       try { await interaction.channel.send({ content: `<@${uid}>`, embeds: [publicEmbed] }); } catch (e) {}
       return interaction.editReply({ content: '✅ Processed and public output posted.' });
     }
 
-    // /obf (obfuscate only)
+    // /obf - obfuscate only; ephemeral input, public output
     if (cmd === 'obf') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -450,6 +470,7 @@ client.on('interactionCreate', async (interaction) => {
       let collected;
       try { collected = await collectCode(); } catch (e) { return interaction.editReply({ content: `❌ ${e.message}` }); }
 
+      // call /obfuscate
       let apiResp;
       try {
         apiResp = await axios.post(API_OBF, { code: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT });
@@ -461,6 +482,7 @@ client.on('interactionCreate', async (interaction) => {
       const obf = apiResp?.data?.obfuscatedCode;
       if (!obf) return interaction.editReply({ content: '❌ API did not return obfuscated code.' });
 
+      // consume tokens for non-owner/non-whitelisted
       if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
         const ok = await consumeTokens(uid, TOKEN_COST);
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens.' });
@@ -487,6 +509,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
+    // Unknown command
     return interaction.reply({ content: 'Unknown command', ephemeral: true });
 
   } catch (err) {
@@ -498,6 +521,41 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+/* ============================
+   Helper: collectCode (outside main try so it can be reused)
+   (Defined here to avoid hoisting issues)
+   ============================ */
+async function collectCodeFromInteraction(interaction) {
+  const attachment = interaction.options.getAttachment('file');
+  if (attachment) {
+    const ext = path.extname(attachment.name).toLowerCase();
+    if (!['.lua', '.txt'].includes(ext)) throw new Error('Only .lua or .txt attachments supported.');
+    const tmp = path.join(TEMP_DIR, `input_${Date.now()}_${attachment.name}`);
+    try {
+      await downloadAttachment(attachment.url, tmp);
+      const content = fs.readFileSync(tmp, 'utf8');
+      cleanupFile(tmp);
+      return { code: content, filename: attachment.name };
+    } catch (e) {
+      cleanupFile(tmp);
+      throw new Error('Failed to download attachment.');
+    }
+  }
+  const code = interaction.options.getString('code');
+  if (code && code.trim().length > 0) return { code, filename: `code_${Date.now()}.lua` };
+  throw new Error('No code provided. Attach a .lua/.txt file or use the code option.');
+}
+
+// We need local wrapper to use the function inside handlers (because of scope)
+async function collectCode() {
+  // Attempt to get interaction from lastEvent? Instead, mutual approach:
+  // We'll throw if called directly (handlers defined inline already use their own collectCode).
+  throw new Error('Internal: collectCode should not be called directly here.');
+}
+
+/* ============================
+   Login
+   ============================ */
 client.login(DISCORD_TOKEN).catch(err => {
   console.error('Discord login failed:', err);
 });
