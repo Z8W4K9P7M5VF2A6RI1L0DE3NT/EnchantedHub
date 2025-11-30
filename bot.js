@@ -1,4 +1,4 @@
-// bot.js — Final single-file bot
+// bot.js — Final single-file bot (with /info, /wl, /bl, /gift PUBLIC; others ephemeral)
 require('dotenv').config();
 
 const fs = require('fs');
@@ -19,21 +19,30 @@ const {
 const { Pool } = require('pg');
 
 //////////////////////////////////////////////////////////////////////////////
-// CONFIG
+// CONFIG - ensure these are set in your .env or Render env
 //////////////////////////////////////////////////////////////////////////////
-
+/*
+Required env vars:
+DISCORD_TOKEN
+CLIENT_ID
+DATABASE_URL
+OWNER_ID
+STORAGE_CHANNEL_ID
+API_BASE          (e.g. https://novahub-zd14.onrender.com)
+API_SECRET
+LOG_WEBHOOK      (optional)
+*/
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error('ERROR: DATABASE_URL is required in env');
   process.exit(1);
 }
-
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 const DOMAIN = process.env.API_BASE || 'https://novahub-zd14.onrender.com';
 const API_OBF_STORE = `${DOMAIN}/obfuscate-and-store`;
 const API_OBF = `${DOMAIN}/obfuscate`;
-const RETRIEVE_URL = (key) => `${DOMAIN}/retrieve/${key}`; // <-- final format
+const RETRIEVE_URL = (key) => `${DOMAIN}/retrieve/${key}`;
 
 const TEMP_DIR = path.join(__dirname, 'Temp_files');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -41,7 +50,6 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 const OWNER_ID = process.env.OWNER_ID || '';
 const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || '';
 const LOG_WEBHOOK = process.env.LOG_WEBHOOK || '';
-
 const API_SECRET = process.env.API_SECRET || '';
 
 const TOKEN_COST = Number(process.env.TOKEN_COST || 5);
@@ -54,9 +62,8 @@ const GIFT_MAX_COUNT = Number(process.env.GIFT_MAX_COUNT || 3);
 const GIFT_WINDOW_MS = Number(process.env.GIFT_WINDOW_MS || 6 * 60 * 60 * 1000); // 6 hours
 
 //////////////////////////////////////////////////////////////////////////////
-// DATABASE INIT + HELPERS
+// DB init + helpers
 //////////////////////////////////////////////////////////////////////////////
-
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -117,13 +124,10 @@ async function getUser(userId) {
   return rows[0];
 }
 
-// consumeTokens respects infinite tokens for owner/whitelisted
+// consumeTokens respects owner/whitelisted infinite tokens
 async function consumeTokens(userId, amount) {
   const user = await getUser(userId);
-  if (String(userId) === String(OWNER_ID) || user.whitelisted) {
-    // infinite tokens: do not deduct
-    return true;
-  }
+  if (String(userId) === String(OWNER_ID) || user.whitelisted) return true;
   await refreshTokensIfNeeded(userId);
   const fresh = await getUser(userId);
   if (Number(fresh.tokens) < amount) return false;
@@ -157,9 +161,8 @@ async function logGift(giverId, receiverId, amount) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// HELPERS: file download + storage upload
+// File helpers
 //////////////////////////////////////////////////////////////////////////////
-
 async function downloadAttachment(url, destPath) {
   const res = await axios({ url, method: 'GET', responseType: 'stream', timeout: API_TIMEOUT });
   const writer = fs.createWriteStream(destPath);
@@ -189,9 +192,8 @@ async function uploadToStorageChannel(client, filePath, fileName) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Slash commands
+// Slash commands (register)
 //////////////////////////////////////////////////////////////////////////////
-
 const commands = [
   new SlashCommandBuilder().setName('info').setDescription('Show usage and information about the bot.'),
   new SlashCommandBuilder().setName('verify').setDescription('Accept the rules to verify yourself.'),
@@ -236,9 +238,8 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 })();
 
 //////////////////////////////////////////////////////////////////////////////
-// BOT
+// Bot client
 //////////////////////////////////////////////////////////////////////////////
-
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel]
@@ -256,16 +257,14 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-
   const cmd = interaction.commandName;
   const userId = interaction.user.id;
 
-  // Ensure user row & refresh tokens
   await ensureUserRow(userId);
   await refreshTokensIfNeeded(userId);
   const user = await getUser(userId);
 
-  // helper: collect code (attachment or code string)
+  // helper to collect code
   async function collectCodeFromInteraction(interaction) {
     const file = interaction.options.getAttachment('file');
     if (file) {
@@ -288,60 +287,67 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   try {
-    // ---------------- /info ----------------
+    // ---------------- /info (PUBLIC)
     if (cmd === 'info') {
       const embed = new EmbedBuilder()
         .setTitle('NovaHub Bot — Info (BETA)')
         .setColor('Blue')
-        .setDescription('Welcome! This service is in BETA. Use /verify to accept the rules. Premium commands cost tokens. Use /view to check balance.')
+        .setDescription('Welcome! This service is in **BETA**. Use /verify to accept the rules. Premium commands cost tokens (5 each). Use /view to check balance.')
         .addFields(
-          { name: '/verify', value: 'Accept rules & verify (required before using commands)', inline: true },
-          { name: '/view', value: 'Show token balance (tokens refresh every 24h)', inline: true },
-          { name: '/apiservice', value: 'Whitelist only — obfuscate & store. Raw input private; public embed posted.', inline: false },
-          { name: '/obf', value: 'Obfuscate only. Raw input private; public embed posted.', inline: false },
-          { name: '/gift', value: `Owner or whitelisted users can gift tokens (whitelisted: max ${GIFT_MAX_PER_GIFT} per gift, ${GIFT_MAX_COUNT} gifts per ${Math.floor(GIFT_WINDOW_MS/3600000)}h).`, inline: false },
+          { name: '/verify', value: 'Accept rules & verify', inline: true },
+          { name: '/view', value: 'View your token balance', inline: true },
+          { name: '/apiservice', value: 'Whitelist only — obfuscate & store (5 tokens)', inline: false },
+          { name: '/obf', value: 'Obfuscate code only (5 tokens)', inline: false },
+          { name: '/gift', value: 'Owner/Whitelist: gift tokens', inline: false },
           { name: '/wl', value: 'Owner-only: whitelist a user', inline: false },
-          { name: '/bl', value: 'Owner-only: remove whitelist (blacklist)', inline: false },
+          { name: '/bl', value: 'Owner-only: remove whitelist', inline: false },
           { name: '/clean_ast', value: 'Proxy to AST cleaner', inline: false }
-        );
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+        )
+        .addFields({ name: 'Notes', value: 'Tokens refresh every 24 hours based on your last refresh timestamp.' });
+
+      // PUBLIC as requested
+      return interaction.reply({ embeds: [embed], ephemeral: false });
     }
 
-    // ---------------- /verify ----------------
+    // ---------------- /verify (ephemeral)
     if (cmd === 'verify') {
       await setVerified(userId);
       if (LOG_WEBHOOK) { try { await axios.post(LOG_WEBHOOK, { content: `🟢 User Verified: <@${userId}> (${userId})` }); } catch (e) {} }
-      return interaction.reply({ content: '✅ You are now verified. Use /info to learn more.', ephemeral: true });
+      return interaction.reply({ content: '✅ You are now verified. You may use commands (if whitelisted).', ephemeral: true });
     }
 
-    // ---------------- /view ----------------
+    // ---------------- /view (ephemeral)
     if (cmd === 'view') {
       const refreshed = await refreshTokensIfNeeded(userId);
       const display = (String(userId) === String(OWNER_ID) || user.whitelisted) ? '∞ (whitelisted/owner)' : `${refreshed}`;
       return interaction.reply({ content: `💠 You have **${display}** tokens. Tokens refresh every 24 hours.`, ephemeral: true });
     }
 
-    // ---------------- /wl ----------------
+    // ---------------- /wl (PUBLIC)
     if (cmd === 'wl') {
       if (String(userId) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only the owner can whitelist users.', ephemeral: true });
       const target = interaction.options.getUser('user');
       if (!target) return interaction.reply({ content: '❌ No user provided.', ephemeral: true });
       await ensureUserRow(target.id);
       await setWhitelist(target.id, true);
-      return interaction.reply({ content: `✅ ${target.tag} is now whitelisted (infinite tokens).`, ephemeral: true });
+
+      // PUBLIC
+      return interaction.reply({ content: `✅ ${target.tag} is now whitelisted (infinite tokens).`, ephemeral: false });
     }
 
-    // ---------------- /bl ----------------
+    // ---------------- /bl (PUBLIC)
     if (cmd === 'bl') {
       if (String(userId) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only the owner can remove whitelist.', ephemeral: true });
       const target = interaction.options.getUser('user');
       if (!target) return interaction.reply({ content: '❌ No user provided.', ephemeral: true });
       await ensureUserRow(target.id);
       await setWhitelist(target.id, false);
-      return interaction.reply({ content: `✅ ${target.tag} removed from whitelist.`, ephemeral: true });
+
+      // PUBLIC
+      return interaction.reply({ content: `✅ ${target.tag} removed from whitelist.`, ephemeral: false });
     }
 
-    // ---------------- /gift ----------------
+    // ---------------- /gift (PUBLIC)
     if (cmd === 'gift') {
       const target = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
@@ -364,19 +370,18 @@ client.on('interactionCreate', async (interaction) => {
       await addTokens(target.id, amount);
       await logGift(userId, target.id, amount);
 
-      // optional logging webhook
       try { if (LOG_WEBHOOK) await axios.post(LOG_WEBHOOK, { content: `🎁 <@${userId}> gifted ${amount} to <@${target.id}>` }); } catch (e) {}
 
-      // notify recipient publicly
+      // notify recipient publicly in channel
       try {
         const ch = await client.channels.fetch(interaction.channelId).catch(()=>null);
         if (ch && ch.send) await ch.send({ content: `<@${target.id}> you were gifted **${amount}** tokens.` });
       } catch (e) {}
 
-      return interaction.reply({ content: `🎁 Gifted **${amount}** tokens to ${target.tag}.`, ephemeral: true });
+      return interaction.reply({ content: `🎁 Gifted **${amount}** tokens to ${target.tag}.`, ephemeral: false });
     }
 
-    // ---------------- /clean_ast ----------------
+    // ---------------- /clean_ast (ephemeral -> public output)
     if (cmd === 'clean_ast') {
       await interaction.deferReply({ ephemeral: true });
       const payloadStr = interaction.options.getString('payload');
@@ -399,30 +404,29 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // ---------------- /apiservice (whitelist only) ----------------
+    // ---------------- /apiservice (ephemeral input, public output) - whitelist only
     if (cmd === 'apiservice') {
       await interaction.deferReply({ ephemeral: true });
 
       if (!user.verified) return interaction.editReply({ content: '❌ You must run /verify first.' });
       if (!user.whitelisted) return interaction.editReply({ content: '❌ This command requires whitelist access.' });
 
-      // If not owner and not whitelisted (shouldn't happen), check tokens
       const userRow = await getUser(userId);
       if (String(userId) !== String(OWNER_ID) && !userRow.whitelisted) {
         const refreshed = await refreshTokensIfNeeded(userId);
         if (refreshed < TOKEN_COST) return interaction.editReply({ content: `❌ Not enough tokens. You have ${refreshed}.` });
       }
 
-      // collect code (ephemeral)
       let collected;
       try { collected = await collectCodeFromInteraction(interaction); } catch (err) { return interaction.editReply({ content: `❌ ${err.message}` }); }
 
-      // call backend obfuscate-and-store (include api_secret)
+      // server expects field "script" for obfuscate-and-store
       let apiResp;
       try {
-        apiResp = await axios.post(API_OBF_STORE, { code: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT });
+        apiResp = await axios.post(API_OBF_STORE, { script: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT });
       } catch (err) {
-        return interaction.editReply({ content: `❌ API error: ${err.message}` });
+        const details = err.response?.data ? `${err.message} — ${JSON.stringify(err.response.data)}` : err.message;
+        return interaction.editReply({ content: `❌ API error: ${details}` });
       }
 
       const key = apiResp?.data?.key;
@@ -434,7 +438,6 @@ client.on('interactionCreate', async (interaction) => {
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens. Try again later.' });
       }
 
-      // Build loader and public embed
       const loader = `return loadstring(game:HttpGet("${RETRIEVE_URL(key)}"))()`;
       const publicEmbed = new EmbedBuilder()
         .setTitle('🔐 NovaHub API — File Stored')
@@ -447,7 +450,7 @@ client.on('interactionCreate', async (interaction) => {
         )
         .setFooter({ text: 'NovaHub API' });
 
-      // If API returned obfuscatedCode, upload to storage channel for download link
+      // optionally attach/download from storage channel
       if (apiResp.data && apiResp.data.obfuscatedCode) {
         const tmpPath = path.join(TEMP_DIR, `obf_${Date.now()}.lua`);
         try {
@@ -457,12 +460,11 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { /* ignore */ } finally { cleanupFile(tmpPath); }
       }
 
-      // Publicly post embed and ping user
       try { await interaction.channel.send({ content: `<@${userId}>`, embeds: [publicEmbed] }); } catch (e) {}
       return interaction.editReply({ content: '✅ Processed — public output posted.' });
     }
 
-    // ---------------- /obf (public obfuscate only) ----------------
+    // ---------------- /obf (ephemeral input, public output)
     if (cmd === 'obf') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -478,7 +480,10 @@ client.on('interactionCreate', async (interaction) => {
       try { collected = await collectCodeFromInteraction(interaction); } catch (err) { return interaction.editReply({ content: `❌ ${err.message}` }); }
 
       let apiResp;
-      try { apiResp = await axios.post(API_OBF, { code: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT }); } catch (err) { return interaction.editReply({ content: `❌ API error: ${err.message}` }); }
+      try { apiResp = await axios.post(API_OBF, { code: collected.code, api_secret: API_SECRET }, { timeout: API_TIMEOUT }); } catch (err) {
+        const details = err.response?.data ? `${err.message} — ${JSON.stringify(err.response.data)}` : err.message;
+        return interaction.editReply({ content: `❌ API error: ${details}` });
+      }
 
       const obf = apiResp?.data?.obfuscatedCode;
       if (!obf) return interaction.editReply({ content: '❌ API did not return obfuscated code.' });
@@ -489,7 +494,7 @@ client.on('interactionCreate', async (interaction) => {
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens. Try again later.' });
       }
 
-      // Save obfuscated file to temp and optionally upload to storage channel
+      // Save and upload
       const tmpPath = path.join(TEMP_DIR, `obf_${Date.now()}.lua`);
       try {
         fs.writeFileSync(tmpPath, obf, 'utf8');
