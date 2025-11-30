@@ -43,7 +43,7 @@ pool.connect((err, client, done) => {
 });
 
 /* ---------------- Constants ---------------- */
-const WATERMARK = "-- </> This file has been secured using Nova Hub Protection ";
+const WATERMARK = "-- </> This file has been secured using Nova Hub Protection\n\n";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw script. Check your Lua syntax. ]] ";
 const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua');
 
