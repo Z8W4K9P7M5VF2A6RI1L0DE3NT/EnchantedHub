@@ -1,11 +1,13 @@
-// app.js - Advanced AST Cleaner (Modes A/B/C: fallback-only, strict, max-repair)
+// app.js
+// Advanced AST Cleaner (A+B+C) — integrated into app.js (mode A/B/C) for internal service
 // - Serves public/ast.html
-// - POST /clean_ast  -> advanced AST cleaning with mode selection (A/B/C)
-// - POST /clean      -> hybrid: try AST then regex fallback
+// - POST /clean_ast -> modes A (fallback-friendly), B (strict), C (max-repair; default)
+// - POST /clean      -> hybrid (tries C then regex fallback)
 // - GET  /health
-// - Port 5001 (internal)
-// Requirements: express, body-parser, luaparse
+// - LISTENS on internal port 5001 (keep server.js proxy to forward /clean_ast -> localhost:5001)
+// - Requirements: express, body-parser, luaparse
 // Install: npm install express body-parser luaparse
+// Usage: node app.js
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -14,12 +16,12 @@ const luaparse = require("luaparse");
 
 const app = express();
 
-// config
+// Configuration
 const INTERNAL_PORT = 5001;
-const BODY_LIMIT = "100mb";
+const BODY_LIMIT = "150mb"; // large-file safe
 const DEFAULT_ARG_PREFIX = "arg";
 const DEFAULT_MAX_ARGS = 10;
-const MAX_PARSE_ATTEMPTS = 4; // for repair mode
+const MAX_PARSE_ATTEMPTS = 4;
 
 app.use(bodyParser.json({ limit: BODY_LIMIT }));
 app.use(bodyParser.urlencoded({ extended: true, limit: BODY_LIMIT }));
@@ -41,7 +43,7 @@ function walkSafe(node, visitor) {
     (function rec(n) {
       if (!n || typeof n !== "object") return;
       if (Array.isArray(n)) { for (const x of n) rec(x); return; }
-      try { visitor(n); } catch (e) { /* swallow visitor errors */ }
+      try { visitor(n); } catch (e) { /* ignore visitor errors */ }
       for (const k of Object.keys(n)) {
         if (k === "range") continue;
         const c = n[k];
@@ -64,7 +66,7 @@ function inferNameFromInit(initSrc) {
   const s = initSrc;
   const m = s.match(/GetService\s*\(\s*["']([\w\s-]+)["']\s*\)/i);
   if (m && m[1]) return m[1].replace(/\s+/g, "") + "Service";
-  if (/game:HttpGet/i.test(s) || /https?:\/\//i.test(s)) return "httpGetResult";
+  if (/\bgame:HttpGet\b/i.test(s) || /https?:\/\//i.test(s)) return "httpGetResult";
   if (/\bloadstring\b/i.test(s)) return "loaded";
   if (/\bMakeWindow\b/i.test(s)) return "window";
   if (/\bMakeTab\b/i.test(s)) return "tab";
@@ -76,21 +78,18 @@ function inferNameFromInit(initSrc) {
   return null;
 }
 
-// ---------- Simple conservative regex fallback ----------
+// ---------- Regex fallback (conservative) ----------
 function regexFallbackClean(code, options = {}) {
   const argPrefix = typeof options.argPrefix === "string" ? options.argPrefix : DEFAULT_ARG_PREFIX;
   const maxArgs = typeof options.maxArgsPerFn === "number" ? options.maxArgsPerFn : DEFAULT_MAX_ARGS;
-
   let out = String(code);
 
-  // ({...})[N] -> argN
   out = out.replace(/\(\{\s*\.{3}\s*\}\)\s*\[\s*(\d+)\s*\]/g, (m, n) => {
     const idx = Number(n);
     if (Number.isFinite(idx) && idx >= 1 && idx <= maxArgs) return `${argPrefix}${idx}`;
     return `${argPrefix}${idx}`;
   });
 
-  // local a,b = ... -> local a,b = arg1, arg2
   out = out.replace(/local\s+([A-Za-z0-9_,\s]+)\s*=\s*\.{3}/g, (m, p1) => {
     const ids = p1.replace(/\s+/g, "").split(",").filter(Boolean);
     if (ids.length === 0) return `local = `;
@@ -98,110 +97,68 @@ function regexFallbackClean(code, options = {}) {
     return `local ${ids.join(", ")} = ${rhs}`;
   });
 
-  // function(...) -> function()
   out = out.replace(/function\s*\(\s*\.{3}\s*\)/g, "function()");
 
-  // whitespace trim
+  out = out.replace(/,\s*([\]\}])/g, "$1");
+  out = out.replace(/^\s*\)\s*$/gm, "");
+
   return out;
 }
 
-// ---------- Pre-parsing sanitizers & repair helpers ----------
-
-// Basic sanitizer: remove obvious broken tokens like stray ") end" sequences, fix repeated trailing commas
+// ---------- Sanitizers & Repair Helpers ----------
 function sanitizeBasic(code) {
   if (!code) return code;
   let out = String(code);
-
-  // Remove weird ") end" or "end)" combos where a trailing ) follows end or vice versa
-  out = out.replace(/\)\s*end\s*\)/g, ")"); // )end) -> )
-  out = out.replace(/end\s*\)/g, "end");   // end) -> end
-
-  // Remove stray unmatched ')' on their own lines
+  out = out.replace(/\)\s*end\s*\)/g, ")");
+  out = out.replace(/end\s*\)/g, "end");
   out = out.replace(/^\s*\)\s*$/gm, "");
-
-  // Remove duplicated 'end' sequences like 'endend' or 'end } end' flattening
   out = out.replace(/end\s+end/g, "end");
-
-  // Remove stray leading commas or trailing commas in tables that might confuse parser
   out = out.replace(/,\s*([\]\}])/g, "$1");
-
-  // If there's an isolated 'end,' replace with 'end'
   out = out.replace(/\bend,\b/g, "end");
-
   return out;
 }
-
-// Balance top-level 'end' by removing extra 'end's if there are too many compared to 'function'
 function sanitizeBalanceEnds(code) {
   if (!code) return code;
   const s = String(code);
   const functionCount = (s.match(/\bfunction\b/g) || []).length;
   const endCount = (s.match(/\bend\b/g) || []).length;
-  if (endCount <= functionCount) return s; // nothing to do
-  // remove some trailing 'end' tokens at the end of file first
+  if (endCount <= functionCount) return s;
   let diff = endCount - functionCount;
-  let out = s;
-  // Try remove `end` occurrences that are alone on a line from the bottom up
-  const lines = out.split("\n");
+  const lines = s.split("\n");
   for (let i = lines.length - 1; i >= 0 && diff > 0; --i) {
     if (/^\s*end\s*$/.test(lines[i])) { lines.splice(i, 1); diff--; }
   }
   return lines.join("\n");
 }
-
-// Attempt to wrap orphaned vararg references in a fake function wrapper then strip later.
-// This helps when the obfuscator emitted body code without a function header.
 function wrapInFunctionIfNeeded(code, argPrefix = DEFAULT_ARG_PREFIX, maxArgs = DEFAULT_MAX_ARGS) {
   const s = String(code);
-  // Heuristic: if code contains patterns of ({...})[N] or '...'-based locals but there is no function(...) in the file,
-  // then wrap in function(...) end to let parser see varargs.
   const usesVarargIndex = /\(\{\s*\.{3}\s*\}\)\s*\[\s*\d+\s*\]/.test(s);
   const hasFunction = /\bfunction\b/.test(s);
   const hasTopLevelVarargAssign = /local\s+[A-Za-z0-9_,\s]+\s*=\s*\.{3}/.test(s);
-
   if ((usesVarargIndex || hasTopLevelVarargAssign) && !hasFunction) {
-    // create a safe wrapper
     const wrapperStart = `local __wrap = function(${Array.from({ length: maxArgs }, (_, i) => argPrefix + (i + 1)).join(", ")})\n`;
     const wrapperEnd = `\nend\n__wrap()`;
     return { code: wrapperStart + s + wrapperEnd, wrapped: true };
   }
   return { code: s, wrapped: false };
 }
-
-// Aggressive repairs: multiple small heuristics (remove byte-order marks, strip trailing illegal tokens, unify quotes)
 function sanitizeAggressive(code) {
   if (!code) return code;
   let out = String(code);
-
-  // Remove BOM
   out = out.replace(/^\uFEFF/, "");
-
-  // Replace CRLF with LF
   out = out.replace(/\r\n/g, "\n");
-
-  // Remove invisible zero-width characters
   out = out.replace(/[\u200B-\u200D\uFEFF]/g, "");
-
-  // Remove lines that are obviously not lua (html tags accidentally pasted)
   out = out.replace(/^\s*<[^>]+>\s*$/gm, "");
-
-  // quick bracket/brace cleanup
   out = out.replace(/\{\s*,/g, "{");
   out = out.replace(/,\s*\}/g, "}");
-
-  // attempt to fix "end)" accidental suffixes
   out = out.replace(/\bend\)\s*$/g, "end");
-
-  // combine with basic sanitization
   out = sanitizeBasic(out);
   out = sanitizeBalanceEnds(out);
-
   return out;
 }
 
-// ---------- Parsing attempt wrapper (tolerant with retries) ----------
+// ---------- Parse wrapper ----------
 function tryParse(code, options = {}) {
-  // options.tolerant true/false controls luaparse tolerant flag
   try {
     const ast = luaparse.parse(code, {
       luaVersion: "5.1",
@@ -217,24 +174,22 @@ function tryParse(code, options = {}) {
   }
 }
 
-// ---------- AST-driven cleaner (robust & safe) ----------
+// ---------- AST Cleaner (robust) ----------
 function cleanWithAST(code, options = {}) {
   const argPrefix = typeof options.argPrefix === "string" ? options.argPrefix : DEFAULT_ARG_PREFIX;
   const maxArgsPerFn = typeof options.maxArgsPerFn === "number" ? options.maxArgsPerFn : DEFAULT_MAX_ARGS;
   const enableRenaming = options.enableRenaming === true;
 
-  // parse tolerant mode (we expect ast)
-  let parsed = tryParse(code, { tolerant: true });
+  const parsed = tryParse(code, { tolerant: true });
   if (!parsed.ok) {
     return { cleaned: code, warnings: ["parse_failed: " + (parsed.error && parsed.error.message)], renameMap: {} };
   }
   const ast = parsed.ast;
 
-  // Collect replacements (start,end,text)
   const replacements = [];
   const funcHeaderMap = new Map();
 
-  // 1) detect functions that are vararg and compute argCounts
+  // 1) detect vararg functions & compute argCounts
   walkSafe(ast, (node) => {
     if (!node) return;
     if ((node.type === "FunctionDeclaration" || node.type === "FunctionExpression") && node.is_vararg) {
@@ -262,10 +217,9 @@ function cleanWithAST(code, options = {}) {
     }
   });
 
-  // 2) replace IndexExpression occurrences ({...})[N] -> argN when inside detected function
+  // 2) replace IndexExpression occurrences
   walkSafe(ast, (node) => {
     if (!node || node.type !== "IndexExpression") return;
-    // find smallest enclosing function
     let enclosing = null;
     for (const fnNode of funcHeaderMap.keys()) {
       if (!fnNode.range || !node.range) continue;
@@ -288,13 +242,12 @@ function cleanWithAST(code, options = {}) {
     }
   });
 
-  // 3) replace local a,b = ... (VarargLiteral)
+  // 3) replace local a,b = ...
   walkSafe(ast, (node) => {
     if (!node || node.type !== "LocalStatement" || !Array.isArray(node.init) || node.init.length === 0) return;
     for (let i = 0; i < node.init.length; ++i) {
       const initNode = node.init[i];
       if (!initNode || initNode.type !== "VarargLiteral") continue;
-      // find enclosing function
       let enclosing = null;
       for (const fnNode of funcHeaderMap.keys()) {
         if (!fnNode.range || !node.range) continue;
@@ -328,7 +281,6 @@ function cleanWithAST(code, options = {}) {
     if (!indexNode || indexNode.type !== "NumericLiteral") return;
     const hasVararg = (base.fields || []).some(f => f && f.type === "TableValue" && f.value && f.value.type === "VarargLiteral");
     if (!hasVararg) return;
-    // find enclosing function
     let enclosing = null;
     for (const fnNode of funcHeaderMap.keys()) {
       if (!fnNode.range || !node.range) continue;
@@ -349,7 +301,7 @@ function cleanWithAST(code, options = {}) {
     }
   });
 
-  // 5) replace function header "(...)" -> "(arg1, arg2, ...)"
+  // 5) replace function header "(...)" -> "(arg1,...)" 
   for (const [fnNode, hdr] of funcHeaderMap.entries()) {
     try {
       if (!fnNode || !fnNode.range) continue;
@@ -365,10 +317,10 @@ function cleanWithAST(code, options = {}) {
         const fallbackPos = code.indexOf("(...)", fnNode.range[0]);
         if (fallbackPos >= 0 && fallbackPos + 4 < fnNode.range[1]) replacements.push({ start: fallbackPos, end: fallbackPos + 5, text: argText });
       }
-    } catch (e) { /* ignore per-fn */ }
+    } catch (e) {}
   }
 
-  // 6) single-element table flattening (conservative)
+  // 6) single-element table flattening
   try {
     const tableDefs = [];
     walkSafe(ast, (node) => {
@@ -401,9 +353,9 @@ function cleanWithAST(code, options = {}) {
         if (leftVar) replacements.push({ start: node.range[0], end: node.range[1], text: `local ${leftVar} = ${found.exprSrc}` });
       });
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 
-  // 7) renaming (conservative)
+  // 7) conservative renaming
   const renameMap = new Map();
   try {
     const usedNames = new Set();
@@ -438,7 +390,7 @@ function cleanWithAST(code, options = {}) {
         }
       });
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 
   // 8) apply replacements descending
   replacements.sort((a, b) => {
@@ -449,15 +401,17 @@ function cleanWithAST(code, options = {}) {
   let out = code;
   const appliedRanges = [];
   for (const r of replacements) {
-    if (!r || typeof r.start !== "number" || typeof r.end !== "number" || r.start >= r.end) continue;
-    if (r.start < 0 || r.end > code.length) continue;
-    let overlap = false;
-    for (const a of appliedRanges) {
-      if (!(r.end <= a.start || r.start >= a.end)) { overlap = true; break; }
-    }
-    if (overlap) continue;
-    out = out.slice(0, r.start) + r.text + out.slice(r.end);
-    appliedRanges.push({ start: r.start, end: r.start + (r.text ? r.text.length : 0) });
+    try {
+      if (!r || typeof r.start !== "number" || typeof r.end !== "number" || r.start >= r.end) continue;
+      if (r.start < 0 || r.end > code.length) continue;
+      let overlap = false;
+      for (const a of appliedRanges) {
+        if (!(r.end <= a.start || r.start >= a.end)) { overlap = true; break; }
+      }
+      if (overlap) continue;
+      out = out.slice(0, r.start) + r.text + out.slice(r.end);
+      appliedRanges.push({ start: r.start, end: r.start + (r.text ? r.text.length : 0) });
+    } catch (e) { /* skip faulty replacement */ }
   }
 
   out = out.replace(/\t/g, "  ").replace(/[ \t]+$/gm, "");
@@ -466,95 +420,73 @@ function cleanWithAST(code, options = {}) {
   return { cleaned: out, warnings: [], renameMap: renameObj };
 }
 
-// ---------- Mode orchestration ----------
+// ---------- Modes ----------
 
 async function runModeA(code, options = {}) {
-  // A: fallback-only: we do not try to fix input; try AST once with tolerant parsing; if fails return regex
   const parsed = tryParse(code, { tolerant: true });
   if (parsed.ok) {
-    // run AST cleaner (safe)
     const r = cleanWithAST(code, options);
-    // if parser reported warnings, we still accept AST result
     return { cleaned: r.cleaned, mode: "A", warnings: r.warnings || [], renameMap: r.renameMap || {} };
   } else {
-    // fallback to regex
     const fallback = regexFallbackClean(code, options);
     return { cleaned: fallback, mode: "A", warnings: ["parse_failed: " + (parsed.error && parsed.error.message)], renameMap: {} };
   }
 }
 
 async function runModeB(code, options = {}) {
-  // B: strict AST: only run AST if code parses cleanly in strict (non-tolerant) mode
   const parsedStrict = tryParse(code, { tolerant: false });
   if (parsedStrict.ok) {
     const r = cleanWithAST(code, options);
     return { cleaned: r.cleaned, mode: "B", warnings: r.warnings || [], renameMap: r.renameMap || {} };
   } else {
-    // do not attempt any auto-repair: return parse error and fallback-only response
     return { cleaned: regexFallbackClean(code, options), mode: "B", warnings: ["strict_parse_failed: " + (parsedStrict.error && parsedStrict.error.message)], renameMap: {} };
   }
 }
 
 async function runModeC(code, options = {}) {
-  // C: maximum repair mode: iterative sanitize + wrap + parse attempts
   let attempt = 0;
   let current = String(code);
-  const tried = [];
   const warnings = [];
 
-  // Attempt loop: try original, then basic sanitize, then balance ends, then aggressive sanitize + wrapper
   while (attempt < MAX_PARSE_ATTEMPTS) {
     attempt++;
-    const modeLabel = ["original", "basic", "balanced", "aggressive-wrapper"][Math.min(attempt - 1, 3)];
-    tried.push(modeLabel);
-
-    const parsed = tryParse(current, { tolerant: attempt === 1 ? true : true }); // always tolerant but repair varies
+    const label = ["original", "basic", "balanced", "aggressive-wrapper"][Math.min(attempt - 1, 3)];
+    const parsed = tryParse(current, { tolerant: true });
     if (parsed.ok) {
-      // success -> run AST cleaning on current code
       try {
         const r = cleanWithAST(current, options);
-        const metaWarnings = [];
-        if (attempt > 1) metaWarnings.push(`repaired_via:${modeLabel}`);
-        return { cleaned: r.cleaned, mode: "C", warnings: metaWarnings, renameMap: r.renameMap || {} };
+        const meta = [];
+        if (attempt > 1) meta.push(`repaired_via:${label}`);
+        return { cleaned: r.cleaned, mode: "C", warnings: meta.concat(warnings), renameMap: r.renameMap || {} };
       } catch (e) {
         warnings.push("ast_transform_error:" + (e && e.message));
         break;
       }
     } else {
-      // capture parse error
       const em = parsed.error && parsed.error.message ? parsed.error.message : String(parsed.error);
-      warnings.push(`parse_failed_attempt_${attempt}:${em}`);
+      warnings.push(`parse_failed_attempt_${attempt}:[${em}]`);
     }
 
-    // prepare next attempt transform
-    if (attempt === 1) {
-      // basic sanitize
-      current = sanitizeBasic(current);
-    } else if (attempt === 2) {
-      current = sanitizeBalanceEnds(current);
-    } else if (attempt >= 3) {
-      // aggressive: sanitize + try wrapper
+    if (attempt === 1) current = sanitizeBasic(current);
+    else if (attempt === 2) current = sanitizeBalanceEnds(current);
+    else {
       current = sanitizeAggressive(current);
       const wrap = wrapInFunctionIfNeeded(current, options.argPrefix, options.maxArgsPerFn);
       if (wrap.wrapped) current = wrap.code;
     }
   }
 
-  // if we get here, all attempts failed -> fallback regex
   const fallback = regexFallbackClean(code, options);
   return { cleaned: fallback, mode: "C", warnings: warnings.length ? warnings : ["all_parse_attempts_failed"], renameMap: {} };
 }
 
 // ---------- Endpoints ----------
 
-// POST /clean_ast
-// body: { code: string, options: { argPrefix, maxArgsPerFn, enableRenaming, mode: 'A'|'B'|'C' } }
 app.post("/clean_ast", async (req, res) => {
   try {
     const code = typeof req.body.code === "string" ? req.body.code : (req.body && req.body.code ? String(req.body.code) : "");
     const opts = req.body.options || {};
     const mode = (opts.mode || "C").toUpperCase();
-
     if (!code) return res.status(400).json({ success: false, error: "no_code_provided" });
 
     const runOpts = {
@@ -566,45 +498,34 @@ app.post("/clean_ast", async (req, res) => {
     let result;
     if (mode === "A") result = await runModeA(code, runOpts);
     else if (mode === "B") result = await runModeB(code, runOpts);
-    else result = await runModeC(code, runOpts); // default C
+    else result = await runModeC(code, runOpts);
 
-    // Attach meta
-    const response = {
+    return res.json({
       success: true,
       cleaned: result.cleaned,
       mode: result.mode,
       warnings: result.warnings || [],
       renameMap: result.renameMap || {}
-    };
-    res.json(response);
+    });
   } catch (err) {
     console.error("clean_ast error:", err && err.stack || err);
     res.status(500).json({ success: false, error: "internal_error", detail: String(err && err.message) });
   }
 });
 
-// POST /clean (hybrid) -> tries AST (default C) then regex fallback
 app.post("/clean", async (req, res) => {
   try {
     const code = typeof req.body.code === "string" ? req.body.code : (req.body && req.body.code ? String(req.body.code) : "");
     const opts = req.body.options || {};
     if (!code) return res.status(400).json({ success: false, error: "no_code_provided" });
 
-    // try mode C first (best effort)
     const runOpts = {
       argPrefix: typeof opts.argPrefix === "string" ? opts.argPrefix : DEFAULT_ARG_PREFIX,
       maxArgsPerFn: typeof opts.maxArgsPerFn === "number" ? opts.maxArgsPerFn : DEFAULT_MAX_ARGS,
       enableRenaming: opts.enableRenaming === true
     };
-
     const astResult = await runModeC(code, runOpts);
-    // if astResult warnings indicate complete failure, produce regex fallback (already done inside runModeC)
-    res.json({
-      success: true,
-      cleaned: astResult.cleaned,
-      mode: astResult.mode,
-      warnings: astResult.warnings || []
-    });
+    return res.json({ success: true, cleaned: astResult.cleaned, mode: astResult.mode, warnings: astResult.warnings || [] });
   } catch (err) {
     console.error("clean error:", err && err.stack || err);
     res.status(500).json({ success: false, error: "internal_error", detail: String(err && err.message) });
@@ -613,7 +534,6 @@ app.post("/clean", async (req, res) => {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-// Serve public/ast.html by default
 app.get("/", (req, res) => {
   const file = path.join(__dirname, "public", "ast.html");
   res.sendFile(file, function (err) {
@@ -621,7 +541,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Start server on internal port
+// Start internal server
 app.listen(INTERNAL_PORT, () => {
   console.log(`Advanced AST Cleaner (A/B/C) running on internal port ${INTERNAL_PORT}`);
 });
