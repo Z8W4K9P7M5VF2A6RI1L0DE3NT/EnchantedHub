@@ -43,7 +43,7 @@ pool.connect((err, client, done) => {
 });
 
 /* ---------------- Constants ---------------- */
-const WATERMARK = "--[[ </> discord.gg/V49Pcq4dDy @SlayersonV4 ]] ";
+const WATERMARK = "-- </> This file has been secured using Nova Hub Protection ";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw script. Check your Lua syntax. ]] ";
 const SCRIPT_LUA_PATH = path.join(__dirname, 'src', 'cli.lua');
 
@@ -102,7 +102,7 @@ async function runObfuscator(rawLua, preset = "Medium") {
 }
 
 /* =======================================================
-       MAIN OBFUSCATION ENDPOINT — NOW /obfuscate
+       MAIN OBFUSCATION ENDPOINT — /obfuscate
 ======================================================== */
 app.post('/obfuscate', async (req, res) => {
     const rawLuaCode = req.body.code;
@@ -164,7 +164,6 @@ app.post("/obfuscate-and-store", async (req, res) => {
 app.get("/retrieve/:key", async (req, res) => {
     const key = req.params.key;
 
-    // Roblox-only rule
     if (!req.headers["user-agent"]?.includes("Roblox")) {
         res.setHeader("Content-Type", "text/plain");
         return res.status(403).send("-- Access Denied.");
@@ -188,7 +187,7 @@ app.get("/retrieve/:key", async (req, res) => {
 });
 
 /* =======================================================
-     ⭐ ADVANCED AST CLEANER REVERSE-PROXY (NEW)
+     ⭐ ADVANCED AST CLEANER REVERSE-PROXY (FINAL)
 ======================================================== */
 app.post("/clean_ast", async (req, res) => {
     try {
@@ -214,7 +213,7 @@ app.post("/clean_ast", async (req, res) => {
                       ROOT
 ------------------------------------------------------ */
 app.get('/', (req, res) => {
-    res.redirect('/ast.html'); // ⭐ if you want AST.html as the homepage
+    res.redirect('/ast.html');
 });
 
 /* -----------------------------------------------------
