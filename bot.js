@@ -1,33 +1,5 @@
-// bot.js — NovaHub Discord Bot (single-file)
+// bot.js — NovaHub Discord Bot (Option B: Primary MyAPI, fallback to external)
 // Requires: node 18+, discord.js v14+, axios, pg, dotenv
-/**
- * Features implemented:
- * - Slash commands: /info, /verify, /view, /wl, /bl, /gift, /apiservice, /obf, /clean_ast
- * - Whitelisted users & owner have infinite tokens
- * - Whitelisted users can gift up to GIFT_MAX_PER_GIFT tokens per gift and at most
- *   GIFT_MAX_COUNT gifts per GIFT_WINDOW_MS period (owner exempt)
- * - /apiservice: uses your API at /apiservice first; falls back to /obfuscate-and-store or EXTERNAL_OBF_API if necessary
- * - Raw input (file/text) is only visible to the invoking user (we use ephemeral replies where appropriate).
- * - Public output (loader URL / preview / downloadable uploaded file) is posted as a public embed in the channel.
- * - Uploads obfuscated file to STORAGE_CHANNEL_ID (if set) and adds link to the public embed.
- * - All DB tables auto-created on start (users, gifts, scripts)
- *
- * Environment variables used (put in your .env):
- * DISCORD_TOKEN, CLIENT_ID, DATABASE_URL, OWNER_ID, STORAGE_CHANNEL_ID, LOG_WEBHOOK (opt),
- * API_SECRET (optional for your API), API_BASE (defaults to https://novahub-zd14.onrender.com),
- * EXTERNAL_OBF_API (optional fallback obfuscation API), TOKEN_COST, DAILY_TOKENS,
- * GIFT_MAX_PER_GIFT, GIFT_MAX_COUNT, GIFT_WINDOW_MS, API_TIMEOUT_MS
- *
- * Notes:
- * - This file expects your server endpoints:
- *    POST {API_BASE}/apiservice    (body: { script, preset?, api_secret? }) -> returns { success, key, loader, obfuscatedCode? }
- *    POST {API_BASE}/obfuscate-and-store (body: { script, api_secret? }) -> returns { key, obfuscatedCode? }
- *    POST {API_BASE}/obfuscate (body: { code, api_secret? }) -> returns { obfuscatedCode }
- *    GET  {API_BASE}/retrieve/:key  (Roblox user-agent protected)
- *
- * - Make sure bot has permission to send messages and upload files to STORAGE_CHANNEL_ID.
- */
-
 require('dotenv').config();
 
 const fs = require('fs');
@@ -54,28 +26,32 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_ID = process.env.OWNER_ID || '';
-const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || ''; // channel for storing downloadable obfuscated files
-const LOG_WEBHOOK = process.env.LOG_WEBHOOK || '';
-const API_SECRET = process.env.API_SECRET || ''; // optional secret to pass to your API if required
-const API_BASE = process.env.API_BASE || 'https://novahub-zd14.onrender.com';
-const EXTERNAL_OBF_API = process.env.EXTERNAL_OBF_API || ''; // optional external obfuscation service
+const STORAGE_CHANNEL_ID = process.env.STORAGE_CHANNEL_ID || ''; // optional channel to post stored files
+const LOG_WEBHOOK = process.env.LOG_WEBHOOK || ''; // optional webhook to log actions
+const API_SECRET = process.env.API_SECRET || ''; // optional secret for your API
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !DATABASE_URL) {
   console.error('Missing required env vars. Set DISCORD_TOKEN, CLIENT_ID, DATABASE_URL.');
   process.exit(1);
 }
 
-/* Endpoints */
-const API_APISERVICE = `${API_BASE}/apiservice`;
-const API_OBF_STORE = `${API_BASE}/obfuscate-and-store`;
-const API_OBF = `${API_BASE}/obfuscate`;
+/* Primary (your) API */
+const API_BASE = process.env.API_BASE || 'https://novahub-zd14.onrender.com';
+const API_APISERVICE = `${API_BASE}/apiservice`;           // expects { script, preset? }
+const API_OBF_STORE = `${API_BASE}/obfuscate-and-store`;  // expects { script }
+const API_OBF = `${API_BASE}/obfuscate`;                  // expects { code }
+
+/* External fallback obfuscation API (must accept { code } and return { obfuscatedCode })
+   If you want an external fallback, set EXTERNAL_OBF_API in your .env */
+const EXTERNAL_OBF_API = process.env.EXTERNAL_OBF_API || process.env.FALLBACK_OBF_API || ''; // optional
+
 const RETRIEVE_URL = (key) => `${API_BASE}/retrieve/${key}`;
 
 /* Runtime constants */
 const TEMP_DIR = path.join(__dirname, 'Temp_files');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-const API_TIMEOUT = Number(process.env.API_TIMEOUT_MS || 120000); // 2 minutes
+const API_TIMEOUT = Number(process.env.API_TIMEOUT_MS || 120000); // ms
 const TOKEN_COST = Number(process.env.TOKEN_COST || 5);
 const DAILY_TOKENS = Number(process.env.DAILY_TOKENS || 15);
 
@@ -89,7 +65,6 @@ const GIFT_WINDOW_MS = Number(process.env.GIFT_WINDOW_MS || 6 * 60 * 60 * 1000);
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 async function initDb() {
-  // create tables if missing
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -110,9 +85,10 @@ async function initDb() {
     );
   `);
 
+  // scripts (keeps parity with server)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS scripts (
-      key VARCHAR(128) PRIMARY KEY,
+      key VARCHAR(64) PRIMARY KEY,
       script TEXT NOT NULL,
       created_at BIGINT NOT NULL
     );
@@ -153,7 +129,7 @@ async function refreshTokensIfNeeded(userId) {
 }
 
 async function consumeTokens(userId, amount) {
-  // owner and whitelisted => infinite tokens
+  // Owner and whitelisted => infinite tokens
   if (String(userId) === String(OWNER_ID)) return true;
   const row = await getUser(userId);
   if (row.whitelisted) return true;
@@ -208,8 +184,8 @@ function cleanupFile(p) {
 }
 
 /**
- * Upload a file to the configured storage channel so it becomes publicly downloadable.
- * Returns the attachment URL (string) or null on failure.
+ * Upload file to configured STORAGE_CHANNEL_ID.
+ * If storage channel is not configured or upload fails, this returns null.
  */
 async function uploadToStorageChannel(client, filePath, fileName) {
   if (!STORAGE_CHANNEL_ID) return null;
@@ -217,7 +193,7 @@ async function uploadToStorageChannel(client, filePath, fileName) {
     const ch = await client.channels.fetch(STORAGE_CHANNEL_ID).catch(() => null);
     if (!ch || !ch.send) return null;
     const msg = await ch.send({ files: [new AttachmentBuilder(filePath, { name: fileName })] });
-    return msg.attachments.first()?.url || null;
+    return msg.attachments.first().url;
   } catch (e) {
     console.warn('uploadToStorageChannel error:', e?.message || e);
     return null;
@@ -231,7 +207,6 @@ const commands = [
   new SlashCommandBuilder().setName('info').setDescription('Show usage and information about the bot.'),
   new SlashCommandBuilder().setName('verify').setDescription('Accept the rules to verify yourself.'),
   new SlashCommandBuilder().setName('view').setDescription('View your current token balance.'),
-  // wl / bl single-user variants (owner only)
   new SlashCommandBuilder()
     .setName('wl')
     .setDescription('Whitelist a user (owner only).')
@@ -249,7 +224,8 @@ const commands = [
     .setName('apiservice')
     .setDescription('(Whitelist only) Obfuscate & store. Raw input visible only to you; public output posted.')
     .addAttachmentOption(opt => opt.setName('file').setDescription('.lua or .txt file').setRequired(false))
-    .addStringOption(opt => opt.setName('code').setDescription('Paste Lua code').setRequired(false)),
+    .addStringOption(opt => opt.setName('code').setDescription('Paste Lua code').setRequired(false))
+    .addStringOption(opt => opt.setName('preset').setDescription('Obfuscation preset (optional)').setRequired(false)),
   new SlashCommandBuilder()
     .setName('obf')
     .setDescription('Obfuscate only. Raw input visible only to you; public output posted.')
@@ -290,7 +266,7 @@ client.once('ready', async () => {
 });
 
 /* ============================
-   Code collection helper (attachment or code string)
+   Helper to collect code from options
    ============================ */
 async function collectCodeFromInteraction(interaction) {
   const attachment = interaction.options.getAttachment('file');
@@ -314,163 +290,155 @@ async function collectCodeFromInteraction(interaction) {
 }
 
 /* ============================
-   API / Obfuscation helpers
+   API / Obfuscation helpers (Option B fallback behavior)
    ============================ */
 
 /**
- * Primary: call your API_APISERVICE which does obfuscation + store.
- * If that fails, attempt (in order):
- *  - POST API_OBF_STORE with script (your store endpoint)
- *  - POST API_OBF to just obfuscate (and optionally store afterwards)
- *  - EXTERNAL_OBF_API as last resort (then try to store)
+ * Try primary /apiservice (obfuscate+store) first.
+ * If that fails, and EXTERNAL_OBF_API is configured, use:
+ *   1) EXTERNAL_OBF_API to obfuscate
+ *   2) Primary API's /obfuscate-and-store to store the obfuscated code
  *
- * Returns: { success: true, key, obfuscatedCode?, used: 'primary_store'|'store_then_obf'|'external' }
- * Throws when all attempts fail.
+ * Returns: { success: true, key, obfuscatedCode?, used: 'primary'|'fallback_external' }
+ * Throws an Error on complete failure.
  */
 async function obfuscateAndStoreWithFallback(rawCode, preset = 'Medium') {
-  // 1) Try your /apiservice endpoint
+  // 1) Try primary API_APISERVICE
   try {
     const body = { script: rawCode, preset };
     if (API_SECRET) body.api_secret = API_SECRET;
     const r = await axios.post(API_APISERVICE, body, { timeout: API_TIMEOUT });
     if (r?.data?.key) {
-      return { success: true, key: r.data.key, obfuscatedCode: r.data.obfuscatedCode || null, used: 'primary_store' };
+      return { success: true, key: r.data.key, obfuscatedCode: r.data.obfuscatedCode || null, used: 'primary' };
     }
-    // If responded but no key, treat as failure
-    throw new Error('Primary API did not return a key.');
-  } catch (errPrimary) {
-    console.warn('Primary apiservice failed:', errPrimary?.message || errPrimary);
+    // If primary returns 2xx but no key -> treat as failure
+    throw new Error('Primary apiservice returned no key.');
+  } catch (primaryErr) {
+    // Log primary failure (we will try fallback only if configured)
+    console.warn('Primary apiservice failed:', primaryErr?.message || primaryErr);
 
-    // 2) Try /obfuscate-and-store (primary store)
+    if (!EXTERNAL_OBF_API) {
+      // If no external fallback, we could also try to call primary /obfuscate-and-store directly,
+      // but apiservice is already the intended primary. So fail here.
+      throw new Error(`Primary apiservice failed and no external fallback configured: ${primaryErr.message || primaryErr}`);
+    }
+
+    // 2) Use external obfuscator
     try {
-      const body = { script: rawCode };
-      if (API_SECRET) body.api_secret = API_SECRET;
-      const r2 = await axios.post(API_OBF_STORE, body, { timeout: API_TIMEOUT });
-      if (r2?.data?.key) {
-        return { success: true, key: r2.data.key, obfuscatedCode: r2.data.obfuscatedCode || null, used: 'obf_store' };
-      }
-      throw new Error('Store endpoint returned no key.');
-    } catch (errStore) {
-      console.warn('Primary store failed:', errStore?.message || errStore);
+      const r2 = await axios.post(EXTERNAL_OBF_API, { code: rawCode }, { timeout: API_TIMEOUT });
+      const obf = r2?.data?.obfuscatedCode || r2?.data?.code || null;
+      if (!obf) throw new Error('External obfuscation API did not return obfuscated code.');
 
-      // 3) If external obfuscation is configured, call it, then store with API_OBF_STORE
-      if (!EXTERNAL_OBF_API) {
-        throw new Error(`Primary apiservice/store failed and no external fallback configured. Primary: ${errPrimary.message || errPrimary}. Store: ${errStore.message || errStore}`);
+      // 3) Store obfuscated code using primary store endpoint (/obfuscate-and-store)
+      const storeBody = { script: obf };
+      if (API_SECRET) storeBody.api_secret = API_SECRET;
+      const r3 = await axios.post(API_OBF_STORE, storeBody, { timeout: API_TIMEOUT });
+      if (r3?.data?.key) {
+        return { success: true, key: r3.data.key, obfuscatedCode: obf, used: 'fallback_external' };
       }
-
-      try {
-        const r3 = await axios.post(EXTERNAL_OBF_API, { code: rawCode }, { timeout: API_TIMEOUT });
-        const obf = r3?.data?.obfuscatedCode || r3?.data?.code || null;
-        if (!obf) throw new Error('External obfuscation returned no obfuscated code.');
-
-        // store obf result to your store
-        const storeBody = { script: obf };
-        if (API_SECRET) storeBody.api_secret = API_SECRET;
-        const r4 = await axios.post(API_OBF_STORE, storeBody, { timeout: API_TIMEOUT });
-        if (r4?.data?.key) {
-          return { success: true, key: r4.data.key, obfuscatedCode: obf, used: 'external_then_store' };
-        }
-        throw new Error('Failed to store obf from external service.');
-      } catch (errExternal) {
-        console.warn('External obfuscation/store failed:', errExternal?.message || errExternal);
-        throw new Error(`All attempts failed. Primary: ${errPrimary.message || errPrimary}. Store: ${errStore?.message || errStore}. External: ${errExternal.message || errExternal}`);
-      }
+      throw new Error('Primary store (/obfuscate-and-store) failed after external obfuscation.');
+    } catch (fallbackErr) {
+      console.warn('Fallback external obfuscation/store failed:', fallbackErr?.message || fallbackErr);
+      throw new Error(`Both primary apiservice and fallback external/store failed. Primary: ${primaryErr.message || primaryErr}. Fallback: ${fallbackErr.message || fallbackErr}`);
     }
   }
 }
 
 /**
- * Obfuscate only (no store). Prefer primary /obfuscate, fallback to EXTERNAL_OBF_API.
+ * Try obfuscation only (no store).
+ * Prefer primary /obfuscate, fallback to EXTERNAL_OBF_API.
  * Returns { obfuscatedCode, used } or throws.
  */
-async function obfuscateOnlyWithFallback(rawCode, preset = 'Medium') {
+async function obfuscateOnlyWithFallback(rawCode) {
   // try primary obfuscate
   try {
-    const body = { code: rawCode, preset };
+    const body = { code: rawCode };
     if (API_SECRET) body.api_secret = API_SECRET;
     const r = await axios.post(API_OBF, body, { timeout: API_TIMEOUT });
-    if (r?.data?.obfuscatedCode) return { obfuscatedCode: r.data.obfuscatedCode, used: 'primary_obf' };
-    throw new Error('Primary obfuscate returned no obfuscatedCode.');
-  } catch (errPrimary) {
-    console.warn('Primary /obfuscate failed:', errPrimary?.message || errPrimary);
-    if (!EXTERNAL_OBF_API) throw new Error(`Primary obfuscate failed and no external fallback available: ${errPrimary.message || errPrimary}`);
+    if (r?.data?.obfuscatedCode) return { obfuscatedCode: r.data.obfuscatedCode, used: 'primary' };
+    throw new Error('Primary /obfuscate returned no obfuscatedCode.');
+  } catch (primaryErr) {
+    console.warn('Primary /obfuscate failed:', primaryErr?.message || primaryErr);
+    if (!EXTERNAL_OBF_API) throw new Error(`Primary obfuscate failed and no external fallback configured: ${primaryErr.message || primaryErr}`);
     try {
       const r2 = await axios.post(EXTERNAL_OBF_API, { code: rawCode }, { timeout: API_TIMEOUT });
       const obf = r2?.data?.obfuscatedCode || r2?.data?.code || null;
-      if (!obf) throw new Error('External service returned no obfuscated code.');
-      return { obfuscatedCode: obf, used: 'external_obf' };
-    } catch (extErr) {
-      console.warn('External obfuscation failed:', extErr?.message || extErr);
-      throw new Error(`Obfuscation failed (primary & external). Primary: ${errPrimary.message || errPrimary}. External: ${extErr.message || extErr}`);
+      if (!obf) throw new Error('External obfuscation API returned no obfuscatedCode.');
+      return { obfuscatedCode: obf, used: 'fallback_external' };
+    } catch (fallbackErr) {
+      console.warn('External obfuscation failed:', fallbackErr?.message || fallbackErr);
+      throw new Error(`Both primary and external obfuscation failed. Primary: ${primaryErr.message || primaryErr}. External: ${fallbackErr.message || fallbackErr}`);
     }
   }
 }
 
 /* ============================
-   Interaction handler (slash commands)
+   Interaction handler
    ============================ */
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const cmd = interaction.commandName;
   const uid = interaction.user.id;
 
-  // ensure user
+  // make sure user exists in DB and tokens are refreshed
   await ensureUserRow(uid);
   await refreshTokensIfNeeded(uid);
   const userRow = await getUser(uid);
 
   try {
-    // /info
+    // --- /info (public) ---
     if (cmd === 'info') {
       const embed = new EmbedBuilder()
         .setTitle('NovaHub — Info (BETA)')
         .setColor('Blue')
-        .setDescription('This service is in **BETA**. Use /verify to accept the rules. Premium commands cost tokens (default 5 each). Whitelisted users and owner have infinite tokens.')
+        .setDescription('This service is in **BETA**. Use /verify to accept the rules. Commands cost tokens (5 each). Whitelisted users and owner have infinite tokens.')
         .addFields(
           { name: '/verify', value: 'Verify to use commands (ephemeral)', inline: true },
           { name: '/view', value: 'View token balance (ephemeral)', inline: true },
           { name: '/apiservice', value: 'Whitelist-only: obfuscate & store (public output)', inline: false },
           { name: '/obf', value: 'Obfuscate only (public output)', inline: false },
-          { name: '/gift', value: `Owner/whitelisted: gift tokens (whitelisted: max ${GIFT_MAX_PER_GIFT} per gift, ${GIFT_MAX_COUNT} gifts per ${GIFT_WINDOW_MS/3600000}h).`, inline: false },
-          { name: '/wl', value: 'Owner only: whitelist user (public)', inline: false },
-          { name: '/bl', value: 'Owner only: un-whitelist user (public)', inline: false }
+          { name: '/gift', value: `Owner/whitelisted: gift tokens (whitelisted limit ${GIFT_MAX_PER_GIFT} per gift, ${GIFT_MAX_COUNT} gifts per ${GIFT_WINDOW_MS/3600000}h).`, inline: false },
+          { name: '/wl', value: 'Owner: whitelist user (public)', inline: false },
+          { name: '/bl', value: 'Owner: unwhitelist user (public)', inline: false }
         ).setFooter({ text: 'NovaHub' });
       return interaction.reply({ embeds: [embed], ephemeral: false });
     }
 
-    // /verify
+    // --- /verify ---
     if (cmd === 'verify') {
       await setVerified(uid);
-      if (LOG_WEBHOOK) axios.post(LOG_WEBHOOK, { content: `User verified: <@${uid}> (${uid})` }).catch(() => {});
-      return interaction.reply({ content: '✅ Verified. You can now use commands (if allowed).', ephemeral: true });
+      if (LOG_WEBHOOK) {
+        axios.post(LOG_WEBHOOK, { content: `User verified: <@${uid}> (${uid})` }).catch(() => {});
+      }
+      return interaction.reply({ content: '✅ Verified. You can now use commands (if whitelisted).', ephemeral: true });
     }
 
-    // /view
+    // --- /view ---
     if (cmd === 'view') {
       const refreshed = await refreshTokensIfNeeded(uid);
       const display = (String(uid) === String(OWNER_ID) || userRow.whitelisted) ? '∞ (owner/whitelisted)' : `${refreshed}`;
       return interaction.reply({ content: `💠 You have **${display}** tokens. Tokens refresh every 24 hours.`, ephemeral: true });
     }
 
-    // /wl (owner)
+    // --- /wl (owner) ---
     if (cmd === 'wl') {
-      if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only the owner can whitelist users.', ephemeral: true });
+      if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only owner can whitelist.', ephemeral: true });
       const target = interaction.options.getUser('user');
       if (!target) return interaction.reply({ content: '❌ No user provided.', ephemeral: true });
       await setWhitelist(target.id, true);
       return interaction.reply({ content: `✅ ${target.tag} has been whitelisted (infinite tokens).`, ephemeral: false });
     }
 
-    // /bl (owner)
+    // --- /bl (owner) ---
     if (cmd === 'bl') {
-      if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only the owner can remove whitelist users.', ephemeral: true });
+      if (String(uid) !== String(OWNER_ID)) return interaction.reply({ content: '❌ Only owner can un-whitelist.', ephemeral: true });
       const target = interaction.options.getUser('user');
       if (!target) return interaction.reply({ content: '❌ No user provided.', ephemeral: true });
       await setWhitelist(target.id, false);
-      return interaction.reply({ content: `✅ ${target.tag} removed from whitelist.`, ephemeral: false });
+      return interaction.reply({ content: `✅ ${target.tag} has been removed from whitelist.`, ephemeral: false });
     }
 
-    // /gift (owner or whitelisted)
+    // --- /gift ---
     if (cmd === 'gift') {
       const target = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
@@ -496,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `🎁 Gifted **${amount}** tokens to ${target.tag}.`, ephemeral: false });
     }
 
-    // /clean_ast
+    // --- /clean_ast ---
     if (cmd === 'clean_ast') {
       await interaction.deferReply({ ephemeral: true });
       const payloadStr = interaction.options.getString('payload');
@@ -517,7 +485,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // /apiservice (whitelist-only)
+    // --- /apiservice (whitelist-only) ---
     if (cmd === 'apiservice') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -525,19 +493,29 @@ client.on('interactionCreate', async (interaction) => {
       if (!verifiedRow.verified) return interaction.editReply({ content: '❌ You must run /verify first.' });
       if (!verifiedRow.whitelisted) return interaction.editReply({ content: '❌ This command requires whitelist access.' });
 
+      // For owner/whitelisted: no token deduction
+      if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
+        const tokensNow = await refreshTokensIfNeeded(uid);
+        if (tokensNow < TOKEN_COST) return interaction.editReply({ content: `❌ Not enough tokens (${tokensNow}).` });
+      }
+
       // collect code
       let collected;
       try { collected = await collectCodeFromInteraction(interaction); } catch (err) { return interaction.editReply({ content: `❌ ${err.message}` }); }
 
-      // Attempt to obfuscate & store (primary -> fallbacks)
+      const preset = interaction.options.getString('preset') || 'Medium';
+
+      // Attempt primary (APISERVICE) with fallback external as defined above
       let storeResult;
       try {
-        storeResult = await obfuscateAndStoreWithFallback(collected.code);
+        storeResult = await obfuscateAndStoreWithFallback(collected.code, preset);
       } catch (err) {
-        return interaction.editReply({ content: `❌ Obfuscation/store failed: ${err.message}` });
+        // provide diagnostic details (but keep concise)
+        const msg = typeof err === 'string' ? err : (err?.message || 'Unknown error');
+        return interaction.editReply({ content: `❌ Obfuscation/store failed: ${msg}` });
       }
 
-      // Deduct tokens for non-owner/non-whitelisted (shouldn't apply for whitelisted but kept for safety)
+      // Deduct tokens for non-owner/non-whitelisted
       if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
         const ok = await consumeTokens(uid, TOKEN_COST);
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens.' });
@@ -553,7 +531,8 @@ client.on('interactionCreate', async (interaction) => {
         .addFields(
           { name: 'Retrieve URL', value: RETRIEVE_URL(key) },
           { name: 'Loader (copyable)', value: '```lua\n' + loader + '\n```' },
-          { name: 'Key', value: `\`${key}\`` }
+          { name: 'Key', value: `\`${key}\`` },
+          { name: 'Method', value: `\`${storeResult.used}\`` }
         ).setFooter({ text: 'NovaHub' });
 
       // If obfuscated code available, upload to storage channel and add download link.
@@ -561,29 +540,41 @@ client.on('interactionCreate', async (interaction) => {
         if (storeResult.obfuscatedCode) {
           const tmpPath = path.join(TEMP_DIR, `obf_${Date.now()}.lua`);
           fs.writeFileSync(tmpPath, storeResult.obfuscatedCode, 'utf8');
-          const publicUrl = await uploadToStorageChannel(client, tmpPath, collected.filename || `obf_${Date.now()}.lua`);
+
+          // Try storage channel first (centralized), otherwise attach directly to channel
+          let publicUrl = await uploadToStorageChannel(client, tmpPath, collected.filename || `obf_${Date.now()}.lua`);
+          if (!publicUrl) {
+            // upload directly to the current channel as fallback
+            const sent = await interaction.channel.send({ files: [new AttachmentBuilder(tmpPath, { name: collected.filename || `obf_${Date.now()}.lua` })] }).catch(() => null);
+            publicUrl = sent?.attachments?.first()?.url || null;
+          }
           if (publicUrl) publicEmbed.addFields({ name: 'Download', value: publicUrl });
           cleanupFile(tmpPath);
         }
       } catch (e) { /* ignore upload errors */ }
 
-      // Post public embed
+      // Post public embed (visible to channel)
       try { await interaction.channel.send({ content: `<@${uid}>`, embeds: [publicEmbed] }); } catch (e) {}
       return interaction.editReply({ content: '✅ Processed and public output posted.' });
     }
 
-    // /obf (obfuscate only)
+    // --- /obf (obfuscate only) ---
     if (cmd === 'obf') {
       await interaction.deferReply({ ephemeral: true });
 
       const verifiedRow = await getUser(uid);
       if (!verifiedRow.verified) return interaction.editReply({ content: '❌ You must run /verify first.' });
 
+      if (String(uid) !== String(OWNER_ID) && !verifiedRow.whitelisted) {
+        const tokensNow = await refreshTokensIfNeeded(uid);
+        if (tokensNow < TOKEN_COST) return interaction.editReply({ content: `❌ Not enough tokens (${tokensNow}).` });
+      }
+
       // collect code
       let collected;
       try { collected = await collectCodeFromInteraction(interaction); } catch (err) { return interaction.editReply({ content: `❌ ${err.message}` }); }
 
-      // obfuscate only (primary -> external)
+      // Try obfuscation with fallback
       let obfResult;
       try {
         obfResult = await obfuscateOnlyWithFallback(collected.code);
@@ -597,16 +588,24 @@ client.on('interactionCreate', async (interaction) => {
         if (!ok) return interaction.editReply({ content: '❌ Failed to deduct tokens.' });
       }
 
-      // Save obfuscated output to temp, upload to storage channel, post public embed
+      // Save obfuscated output to temp, upload to storage channel (or current channel), post public embed
       const tmp = path.join(TEMP_DIR, `obf_${Date.now()}.lua`);
       try {
         fs.writeFileSync(tmp, obfResult.obfuscatedCode, 'utf8');
-        const publicUrl = await uploadToStorageChannel(client, tmp, collected.filename || `obf_${Date.now()}.lua`);
+
+        // try storage channel first
+        let publicUrl = await uploadToStorageChannel(client, tmp, collected.filename || `obf_${Date.now()}.lua`);
+        if (!publicUrl) {
+          const sent = await interaction.channel.send({ files: [new AttachmentBuilder(tmp, { name: collected.filename || `obf_${Date.now()}.lua` })] }).catch(() => null);
+          publicUrl = sent?.attachments?.first()?.url || null;
+        }
+
         const embed = new EmbedBuilder()
           .setTitle('Obfuscation Complete')
           .setColor('Purple')
           .setDescription(`<@${uid}> your obfuscated script is ready.`)
-          .addFields({ name: 'Preview', value: '```lua\n' + obfResult.obfuscatedCode.slice(0, 1900) + '\n```' });
+          .addFields({ name: 'Preview', value: '```lua\n' + obfResult.obfuscatedCode.slice(0, 1900) + '\n```' })
+          .addFields({ name: 'Method', value: `\`${obfResult.used}\`` });
 
         if (publicUrl) embed.addFields({ name: 'Download', value: publicUrl });
         await interaction.channel.send({ content: `<@${uid}>`, embeds: [embed] });
@@ -618,7 +617,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // unknown
+    // Unknown
     return interaction.reply({ content: 'Unknown command', ephemeral: true });
 
   } catch (err) {
