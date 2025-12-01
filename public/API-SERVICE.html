@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NovaHub API-SERVICE</title>
+    <title>NovaHub API Service</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -49,7 +49,7 @@
         .card-bg {
             background: var(--purple-bg);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(165, 94, 234, 0.3);
+            border: 1px solid rgba(var(--purple-accent), 0.3); 
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px var(--purple-glow);
         }
 
@@ -57,7 +57,7 @@
             text-shadow: 0 0 10px var(--purple-accent);
         }
         .card-glow-inner {
-            box-shadow: inset 0 0 8px rgba(165, 94, 234, 0.2);
+            box-shadow: inset 0 0 8px rgba(var(--purple-accent), 0.2);
         }
         
         textarea {
@@ -66,7 +66,7 @@
             min-height: 250px;
             background-color: var(--purple-dark);
             color: #E0E0E0;
-            border: 1px solid rgba(165, 94, 234, 0.4);
+            border: 1px solid rgba(var(--purple-accent), 0.4);
         }
         textarea:focus {
              border-color: var(--purple-accent) !important;
@@ -81,9 +81,6 @@
             letter-spacing: 0.05em;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
         .btn-primary {
@@ -108,7 +105,7 @@
             color: var(--purple-light);
         }
         .btn-secondary:hover {
-            background: rgba(165, 94, 234, 0.2);
+            background: rgba(var(--purple-accent), 0.2);
             border-color: var(--purple-light);
             transform: translateY(-1px);
         }
@@ -120,13 +117,7 @@
             transform: translateY(-3px) scale(1.02);
             box-shadow: 0 8px 20px rgba(114, 137, 218, 0.5);
         }
-        
-        .btn-tab {
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
+
 
         #file-upload { display: none; }
         .logo-container {
@@ -139,14 +130,15 @@
             box-shadow: 0 0 15px var(--purple-glow);
             transform: rotate(-5deg);
         }
-        .logo-image {
-            background-image: url('https://placehold.co/50x50/3a006b/C3B1E1?text=NH');
-            background-size: cover;
-            width: 100%;
-            height: 100%;
-        }
         .logo-container:hover {
             transform: rotate(0deg) scale(1.05);
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--purple-accent), transparent);
+            margin: 40px 0;
+            opacity: 0.7;
         }
 
         .text-purple-light {
@@ -155,78 +147,57 @@
     </style>
 </head>
 <body class="min-h-screen flex items-start justify-center p-4">
-    <div class="container w-full max-w-4xl card-bg p-6 sm:p-10 rounded-2xl shadow-2xl mt-8 card-glow-inner">
+    <div class="container w-full max-w-4xl card-bg p-8 sm:p-10 rounded-2xl shadow-2xl mt-12 card-glow-inner">
         
-        <div class="flex items-center justify-center mb-6">
+        <div class="flex items-center justify-center mb-8">
             <div class="logo-container">
-                <div class="logo-image" alt="NovaHub Logo"></div>
+                <img src="profile.png" alt="NovaHub Logo" class="w-full h-full object-cover">
             </div>
-            <h1 class="text-3xl sm:text-4xl font-bold text-white glow">
+            <h1 class="text-4xl font-bold text-white glow">
                 <span style="color: var(--purple-accent);">NovaHub</span> API Service
             </h1>
         </div>
         
-        <p class="text-purple-light text-center mb-6 font-medium text-sm sm:text-base">
-            Secure your script with a password required to access the direct loader link.
+        <p class="text-purple-light text-center mb-8 font-medium">
+            Paste your final Lua code to generate a secure, script.
         </p>
 
-        <div class="flex mb-8 bg-gray-900 rounded-lg p-1">
-            <button id="tab-create" onclick="setView('create')" class="flex-1 btn-tab text-white bg-purple-medium hover:bg-purple-medium/70">
-                <i class="fas fa-plus-circle mr-2"></i> Create New
-            </button>
-            <button id="tab-load" disabled class="flex-1 btn-tab text-purple-light bg-gray-900 cursor-not-allowed opacity-50">
-                <i class="fas fa-edit mr-2"></i> Load Existing (Disabled)
+        <div class="mb-6">
+            <label for="lua-input" class="block text-sm font-medium text-purple-light mb-2">Input Lua Code:</label>
+            <textarea id="lua-input" rows="12" class="w-full rounded-lg p-4 shadow-inner" placeholder="Paste your script here..."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+            <label for="file-upload" class="btn-secondary btn-base w-full sm:w-auto text-sm">
+                <input type="file" id="file-upload" accept=".lua,.txt" onchange="uploadCode(event)">
+                <i class="fas fa-upload mr-2"></i> Upload Code
+            </label>
+
+            <button onclick="storeScript()" id="store-button"
+                class="btn-primary btn-base w-full sm:w-auto text-sm disabled:opacity-50">
+                <i class="fas fa-save inline w-5 h-5 mr-2"></i>
+                Generate Secure Key
             </button>
         </div>
 
         <div id="status" class="text-center font-medium mb-6 min-h-6 text-purple-light">
-            Ready to secure your script.
+            Ready to protect script.
         </div>
 
-        <div id="view-create" class="view">
-            <div class="mb-4">
-                <label for="lua-input" class="block text-sm font-medium text-purple-light mb-2">Lua Code (Raw Source):</label>
-                <textarea id="lua-input" rows="12" class="w-full rounded-lg p-4 shadow-inner" placeholder="print(&quot;NovaHub Secure Script Initialized!&quot;)\n-- Paste your full code here."></textarea>
-            </div>
-            
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-                <label for="file-upload" class="btn-secondary btn-base w-full sm:w-auto text-sm">
-                    <input type="file" id="file-upload" accept=".lua,.txt" onchange="uploadCode(event)">
-                    <i class="fas fa-upload mr-2"></i> Upload Code
-                </label>
-            </div>
-
-            <div class="mb-6">
-                 
-                 <input type="password" id="access-password" class="w-full rounded-lg p-3 text-sm bg-gray-800 text-white border border-purple-accent/50 focus:border-purple-accent focus:ring-1 focus:ring-purple-accent" placeholder="Primary Edit/Access Password (Required, Min 4 Chars)">
-            </div>
-            
-            
-            <button onclick="handleCreateScript()" id="create-button"
-                class="btn-primary btn-base w-full text-sm disabled:opacity-50 mb-8">
-                <i class="fas fa-lock inline w-5 h-5 mr-2"></i>
-                Create Script & Generate Secure Key
-            </button>
-        </div>
-
-        <div id="view-load" class="view hidden"></div>
-        <div id="view-edit" class="view hidden"></div>
-
-        <div id="output-area" class="mt-4 border-t border-purple-accent/50 pt-6">
+        <div class="mb-4">
             <label for="lua-output" class="block text-sm font-medium text-purple-light mb-2">Roblox Loader Script:</label>
-            <div class="flex items-stretch gap-4">
-                <textarea id="lua-output" rows="3" readonly class="flex-grow rounded-lg p-4 shadow-inner text-green-400" placeholder="The loadstring will appear here after creation."></textarea>
+            <textarea id="lua-output" rows="3" readonly class="w-full rounded-lg p-4 shadow-inner" placeholder="The secure loadstring will appear here after storage."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between gap-4">
+            <div class="flex gap-4 w-full sm:w-auto">
                 <button onclick="copyOutput()" id="copy-button"
-                        class="btn-secondary btn-base text-xs disabled:opacity-50 px-4 py-2 self-start min-w-[100px]">
+                        class="btn-secondary btn-base w-full sm:w-auto text-xs disabled:opacity-50">
                     <i class="fas fa-copy mr-2"></i>
-                    Copy
+                    Copy Loader
                 </button>
             </div>
-        </div>
-
-        <div class="section-divider mt-6"></div>
-
-        <div class="flex flex-col sm:flex-row justify-end gap-4">
+            
             <a href="https://discord.gg/b5kEG98NN" target="_blank" 
                 class="btn-discord btn-base inline-flex items-center justify-center w-full sm:w-auto text-xs">
                 <i class="fab fa-discord text-lg mr-2"></i>
@@ -237,30 +208,9 @@
     </div>
 
     <script>
-        const API_BASE_URL = "https://novahub-zd14.onrender.com/"; 
+        const STORAGE_API_BASE_URL = ""; 
 
-        let state = {
-            view: 'create',
-            scriptKey: '',
-            rawScript: 'print("NovaHub Secure Script Initialized!")  -- Paste your full code here.',
-        };
-
-        document.getElementById('lua-input').value = state.rawScript;
-
-        function setView(newView) {
-            state.view = newView;
-            document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
-
-            const tabCreate = document.getElementById('tab-create');
-            const targetView = document.getElementById(`view-create`);
-            
-            if (targetView) {
-                targetView.classList.remove('hidden');
-            }
-
-            tabCreate.classList.replace('bg-gray-900', 'bg-purple-medium');
-            tabCreate.classList.replace('text-purple-light', 'text-white');
-        }
+        document.getElementById('lua-input').value = 'print("NovaHub Secure Script Initialized!")\n-- Paste your full code here.';
 
         function setStatus(message, isError = false) {
             const statusElement = document.getElementById('status');
@@ -271,8 +221,6 @@
             } else {
                 statusElement.classList.add('text-green-400');
             }
-            statusElement.classList.remove('animate-pulse-once');
-            void statusElement.offsetWidth; 
             statusElement.classList.add('animate-pulse-once');
         }
 
@@ -289,98 +237,10 @@
         `;
         document.head.appendChild(style);
 
-        function getInputElement(view) {
-            return document.getElementById('lua-input');
-        }
-
-        function updateOutput() {
-            const output = document.getElementById('lua-output');
-            if (!API_BASE_URL) {
-                output.value = 'ERROR: API_BASE_URL is empty! Update the variable in the HTML source.';
-                setStatus('CRITICAL: API_BASE_URL is not set!', true);
-                return;
-            }
-
-            if (state.scriptKey) {
-                
-                const fullRetrievalUrl = `${API_BASE_URL.replace(/\/$/, '')}/api/retrieve/${state.scriptKey}`; 
-                
-                output.value = `loadstring(game:HttpGet("${fullRetrievalUrl}"))()`; 
-            } else {
-                output.value = 'The loadstring will appear here after creation.';
-            }
-        }
-
-        function setButtonState(buttonId, isLoading, defaultText) {
-            const button = document.getElementById(buttonId);
-            if (button) {
-                button.disabled = isLoading;
-                button.innerHTML = isLoading 
-                    ? '<i class="fas fa-hdd fa-spin mr-2"></i> Processing...'
-                    : defaultText;
-            }
-        }
-
-        async function handleCreateScript() {
-            if (!API_BASE_URL) {
-                setStatus('CRITICAL: API_BASE_URL is not set!', true);
-                updateOutput();
-                return;
-            }
-
-            const inputElement = document.getElementById('lua-input');
-            const accessPasswordElement = document.getElementById('access-password');
-            
-            const script = inputElement.value;
-            const accessPassword = accessPasswordElement.value;
-            const editPassword = accessPassword; 
-
-            if (!script.trim() || accessPassword.length < 4) {
-                setStatus('Please provide Lua code and a required Primary Edit/Access Password (min 4 chars)!', true);
-                return;
-            }
-            
-            setButtonState('create-button', true, '<i class="fas fa-lock inline w-5 h-5 mr-2"></i>Create Script & Generate Secure Key');
-            setStatus('Sending script to storage API for creation and obfuscation...', false);
-
-            try {
-                const response = await fetch(`${API_BASE_URL.replace(/\/$/, '')}/create-secure-script`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        script: script, 
-                        
-                        accessPassword: accessPassword,
-                        editPassword: editPassword 
-                    }), 
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    setStatus(`ERROR: Creation failed. ${data.error || 'API failed.'}`, true); 
-                    return;
-                }
-
-                state.scriptKey = data.key;
-                state.rawScript = script;
-                
-                updateOutput();
-                
-                setStatus(`Success! Script Key saved: **${data.key}**. **Edit Password: ${accessPassword}**.`, false);
-                
-            } catch (error) {
-                setStatus(`ERROR: Failed to connect to API (${API_BASE_URL}). Please check your server status.`, true);
-                console.error('API Fetch error:', error);
-            } finally {
-                setButtonState('create-button', false, '<i class="fas fa-lock inline w-5 h-5 mr-2"></i>Create Script & Generate Secure Key');
-            }
-        }
-
         function copyOutput() {
             const output = document.getElementById('lua-output');
-            if (!output.value.trim() || output.value.includes('ERROR:')) {
-                setStatus("Nothing valid to copy!", true);
+            if (!output.value.trim()) {
+                setStatus("Nothing to copy!", true);
                 return;
             }
             output.select();
@@ -401,14 +261,16 @@
                 return;
             }
 
+            const validTypes = ['text/plain', 'application/x-lua', ''];
+            if (!validTypes.includes(file.type) && !file.name.endsWith('.lua') && !file.name.endsWith('.txt')) {
+                setStatus(`Unsupported file type: ${file.name}. Please upload a .lua or .txt file.`, true);
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = function(e) {
-                const currentInput = document.getElementById('lua-input');
-                if (currentInput) {
-                    currentInput.value = e.target.result;
-                    state.rawScript = e.target.result;
-                    setStatus(`Successfully loaded ${file.name}. Ready to process.`, false);
-                }
+                document.getElementById('lua-input').value = e.target.result;
+                setStatus(`Successfully loaded ${file.name}. Ready to store.`, false);
             };
             reader.onerror = function() {
                 setStatus(`Error reading file: ${file.name}.`, true);
@@ -416,9 +278,52 @@
             reader.readAsText(file);
         }
 
-        setView('create'); 
+        async function storeScript() {
+            const input = document.getElementById('lua-input').value;
+            const output = document.getElementById('lua-output');
+            const button = document.getElementById('store-button');
+            
+            if (!input.trim()) {
+                setStatus('Please paste or upload some Lua code first!', true);
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-hdd fa-spin mr-2"></i> Storing Script...';
+            setStatus(`Sending script to storage API...`, false);
+            output.value = '';
+
+            try {
+                const storeResponse = await fetch(`${STORAGE_API_BASE_URL}/obfuscate-and-store`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: input }), 
+                });
+
+                const storeData = await storeResponse.json();
+
+                if (!storeResponse.ok) {
+                    setStatus(`ERROR: Storage failed.`, true);
+                    output.value = `--- Storage Error ---\n${storeData.error || 'API failed to store script.'}`;
+                    return;
+                }
+
+                const scriptKey = storeData.key;
+                
+                const fullRetrievalUrl = `${window.location.origin}/retrieve/${scriptKey}`;
+                const loaderScript = `loadstring(game:HttpGet('${fullRetrievalUrl}'))()`;
+
+                setStatus('Success! Secure loader key generated.', false);
+                output.value = loaderScript;
+                
+            } catch (error) {
+                setStatus(`ERROR: Failed to connect to API. Check network/URL.`, true);
+                console.error('API Fetch error:', error);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-save inline w-5 h-5 mr-2"></i>Generate Secure Key';
+            }
+        }
     </script>
 </body>
 </html>
-
-
