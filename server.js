@@ -1,6 +1,6 @@
 // =======================================================
 // NovaHub Backend (Obfuscation + Storage)
-// Full Updated Version
+// Full Updated Version (API-SERVICE.html Added)
 // =======================================================
 
 const express = require("express");
@@ -47,7 +47,14 @@ pool.connect((err, client, done) => {
 });
 
 app.use(cors());
+
+// --------------------- Static Folder ---------------------
 app.use(express.static("public"));
+
+// --------------------- Serve API-SERVICE.html ---------------------
+app.get("/API-SERVICE.html", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "API-SERVICE.html"));
+});
 
 // --------------------- Constants ---------------------
 const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] ";
