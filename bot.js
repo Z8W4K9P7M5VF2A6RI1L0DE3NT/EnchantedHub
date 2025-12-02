@@ -240,7 +240,7 @@ client.on("interactionCreate", async interaction => {
                 const script = raw.data;
 
                 const api = await axios.post(
-                    `${API_BASE}/obf`,
+                    `${API_BASE}/obfuscate`,
                     { script },
                     { timeout: 30000 }
                 );
