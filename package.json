@@ -1,0 +1,27 @@
+{
+  "name": "novahub-obfuscator-service",
+  "version": "1.0.0",
+  "description": "NovaHub Obfuscator (API + Discord bot)",
+  "main": "server.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:web\" \"npm run start:bot\"",
+    "start:web": "node server.js",
+    "start:bot": "node bot.js",
+    "dev:web": "nodemon server.js",
+    "dev:bot": "nodemon bot.js"
+  },
+  "author": "NovaHub",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.5.0",
+    "concurrently": "^8.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pg": "^8.11.0",
+    "discord.js": "^14.14.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
