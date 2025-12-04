@@ -4,11 +4,15 @@
   "description": "NovaHub Obfuscator (API + Discord bot)",
   "main": "server.js",
   "scripts": {
-    "start": "concurrently \"npm run start:web\" \"npm run start:bot\"",
+    "start": "concurrently \"npm run start:web\" \"npm run start:bot\" \"npm run start:bypass\"",
     "start:web": "node server.js",
     "start:bot": "node bot.js",
+    "start:bypass": "node bypasser.js",
+
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:bot\" \"npm run dev:bypass\"",
     "dev:web": "nodemon server.js",
-    "dev:bot": "nodemon bot.js"
+    "dev:bot": "nodemon bot.js",
+    "dev:bypass": "nodemon bypasser.js"
   },
   "author": "NovaHub",
   "license": "MIT",
