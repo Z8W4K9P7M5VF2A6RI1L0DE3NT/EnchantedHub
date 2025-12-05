@@ -268,7 +268,7 @@ client.on("interactionCreate", async (interaction) => {
     saveUsers(db);
 
     // ephemeral reply in channel
-    await interaction.reply({ content: "✅ Verified — you can now use commands.", ephemeral: false });
+    await interaction.reply({ content: "✅ Verified — you can now use commands.", ephemeral: true });
 
     // DM the user confirming verification (silently ignore if DMs closed)
     try {
@@ -285,7 +285,7 @@ client.on("interactionCreate", async (interaction) => {
     const db = loadUsers();
     const u = db[uid] || ensureUser(uid);
     const tokens = hasInfinite(uid) ? "∞ (whitelisted/owner)" : (u.tokens || 0);
-    await interaction.reply({ content: `🪙 You have **${tokens}** tokens.`, ephemeral: false. });
+    await interaction.reply({ content: `🪙 You have **${tokens}** tokens.`, ephemeral: true });
     return;
   }
 
@@ -448,7 +448,7 @@ client.on("interactionCreate", async (interaction) => {
         .setDescription(`**Key:** \`${key}\`\n\n**Loader:**\n\`\`\`lua\n${loader}\n\`\`\``)
         .setFooter({ text: `Requested by ${interaction.user.tag}` });
 
-      await interaction.followUp({ content: ` API Script Request Created by <@${uid}>`, embeds: [embed], ephemeral: false });
+      await interaction.followUp({ content: `✅ API Loader Created by <@${uid}>`, embeds: [embed], ephemeral: false });
     } catch (err) {
       console.error("API store error:", err?.response?.data || err?.message || err);
       await interaction.followUp({ content: "❌ API Loader failed.", ephemeral: true });
