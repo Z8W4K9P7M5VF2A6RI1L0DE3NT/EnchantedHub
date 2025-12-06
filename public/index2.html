@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fyll NovaHub Front end</title>
+
+  <!-- Tailwind via CDN for convenience -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+
+  <style>
+    :root{
+      --bg-900:#07040a;
+      --panel:#0f1220;
+      --accent:#A55EEA;
+      --accent-2:#53E0C9;
+      --muted:#9aa0a6;
+    }
+    html,body,#app{height:100%}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;background:radial-gradient(circle at 10% 10%, #071029 0%, #000 60%); color:#e7e7ea}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(165,94,234,0.08); border-radius:14px; padding:1rem; box-shadow:0 12px 30px rgba(3,3,9,0.6),0 0 40px rgba(165,94,234,0.12)}
+    .muted{color:var(--muted)}
+    .accent{color:var(--accent)}
+    .logo-round{width:56px;height:56px;border-radius:12px;overflow:hidden;border:2px solid rgba(165,94,234,0.18)}
+    textarea, input, select { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:inherit; padding:0.6rem; border-radius:8px; }
+    .btn { padding:0.6rem .9rem; border-radius:10px; font-weight:600; cursor:pointer; }
+    .btn-primary{ background:linear-gradient(90deg,var(--accent), #6b2be2); color:white; border: none }
+    .btn-ghost{ background:rgba(255,255,255,0.03); color:var(--muted); border:1px solid rgba(255,255,255,0.03) }
+    #particles{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+    .no-select{ user-select:none }
+    .small-muted{ font-size:0.85rem; color: #b8b8bf }
+    .hidden { display:none }
+  </style>
+</head>
+<body>
+  <div id="particles"></div>
+
+  <div id="app" class="relative z-10 p-6 max-w-6xl mx-auto">
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-4">
+        <div class="logo-round card flex items-center justify-center">
+          <img src="profile.png" alt="logo" class="w-full h-full object-cover" onerror="this.style.display='none'">
+        </div>
+        <div>
+          <div class="text-2xl font-bold">Fyll <span class="accent">NovaHub</span> Front end</div>
+          <div class="small-muted">Obfuscation · Storage · ALU</div>
+        </div>
+      </div>
+
+      <div id="top-controls" class="flex items-center gap-4">
+        <div id="music-control" class="flex items-center gap-2">
+          <button id="music-toggle" class="btn btn-ghost"><i class="fas fa-play"></i></button>
+        </div>
+
+        <div id="auth-controls" class="flex items-center gap-2">
+          <button id="btn-show-login" class="btn btn-primary">Sign In</button>
+          <button id="btn-show-register" class="btn btn-ghost">Sign Up</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="grid grid-cols-12 gap-6">
+      <!-- Left column -->
+      <section class="col-span-12 lg:col-span-8 space-y-6">
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-xl font-bold">Obfuscator</h2>
+              <div class="small-muted">Paste code or upload a .lua file, then Obfuscate or Store.</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="preset" class="mr-2">
+                <option>Low</option>
+                <option selected>Medium</option>
+                <option>High</option>
+              </select>
+              <label class="btn btn-ghost cursor-pointer">
+                <input id="file-upload" type="file" accept=".lua,.txt" class="hidden">
+                <i class="fas fa-upload"></i> Upload
+              </label>
+              <button id="btn-obfuscate" class="btn btn-primary">Obfuscate</button>
+            </div>
+          </div>
+
+          <textarea id="lua-input" rows="12" placeholder="Paste your Lua code here...">print("NovaHub Secure Script Initialized!")</textarea>
+
+          <div class="flex items-center gap-3 mt-3">
+            <button id="btn-store" class="btn btn-primary">Generate Secure Key (Store)</button>
+            <button id="btn-copy-output" class="btn btn-ghost">Copy Output</button>
+            <div id="status" class="ml-auto small-muted">Ready</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="font-semibold mb-2">Output / Loader</h3>
+          <textarea id="lua-output" rows="4" readonly placeholder="Loader will appear here after store (loadstring(...))."></textarea>
+          <div class="flex items-center gap-2 mt-2">
+            <button id="btn-download" class="btn btn-ghost"><i class="fas fa-download"></i> Download</button>
+            <button id="btn-copy-loader" class="btn btn-primary">Copy Loader</button>
+            <div id="output-msg" class="small-muted ml-auto"></div>
+          </div>
+        </div>
+
+        <div class="card" id="scripts-card">
+          <h3 class="font-semibold mb-2">My Stored Scripts</h3>
+          <div id="scripts-list" class="space-y-2 small-muted">
+            <!-- populated dynamically -->
+            <div class="text-center">Sign in to see your stored scripts.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right column -->
+      <aside class="col-span-12 lg:col-span-4 space-y-6">
+        <div class="card">
+          <h4 class="font-semibold">Account</h4>
+          <div id="account-box" class="mt-3">
+            <div class="small-muted">Not signed in</div>
+          </div>
+          <div id="account-actions" class="mt-3 hidden">
+            <div class="flex gap-2">
+              <button id="btn-logout" class="btn btn-ghost">Sign Out</button>
+              <button id="btn-me" class="btn btn-ghost">Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4 class="font-semibold">Activity (ALU)</h4>
+          <div id="activity-list" class="mt-3 small-muted">Sign in to see activity.</div>
+          <div id="admin-alu" class="mt-3 hidden">
+            <hr class="my-3" />
+            <div class="small-muted">Admin logs:</div>
+            <div id="alu-logs" class="max-h-48 overflow-auto small-muted"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4 class="font-semibold">Help</h4>
+          <div class="small-muted mt-2">
+            Use Discord OAuth or email login. Stored scripts generate a key; use the loader in Roblox.
+          </div>
+          <a id="discord-login" href="#" class="inline-block mt-3 bg-[#5865F2] px-3 py-2 rounded text-white">Sign in with Discord</a>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Login/Register Modal -->
+  <div id="modal-root" class="fixed inset-0 z-50 hidden items-center justify-center">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative max-w-md w-full p-6 card z-50">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-title" class="text-lg font-bold">Sign In</h3>
+        <button id="modal-close" class="btn btn-ghost">Close</button>
+      </div>
+
+      <div id="modal-body">
+        <!-- forms injected -->
+      </div>
+    </div>
+  </div>
+
+  <audio id="bg-music" loop src="music.mp3"></audio>
+
+  <script>
+  /*********************************************************
+   * Fyll NovaHub Front end - Single-file HTML + JS client
+   * - Configure API_ROOT (same origin or other)
+   * - Requires backend endpoints described earlier
+   *********************************************************/
+  const API_ROOT = ''; // <-- set to backend origin e.g. 'https://novahub.example.com' or leave blank for same origin
+
+  // Utils
+  const $ = (sel) => document.querySelector(sel);
+  const $all = (sel) => Array.from(document.querySelectorAll(sel));
+  const setStatus = (msg, err) => {
+    const s = $('#status'); s.textContent = msg; s.style.color = err ? '#ff7a7a' : '#9ee29e';
+  };
+
+  // Particles (simple)
+  (function particles(){
+    const root = document.getElementById('particles');
+    for(let i=0;i<10;i++){
+      const d = document.createElement('div');
+      const size = 30 + Math.random()*120;
+      d.style.width=d.style.height=size+'px';
+      d.style.position='absolute';
+      d.style.left = Math.random()*100+'%';
+      d.style.top = Math.random()*100+'%';
+      d.style.background = Math.random()>0.5 ? 'radial-gradient(circle,#6b2be2,transparent)' : 'radial-gradient(circle,#53E0C9,transparent)';
+      d.style.opacity = 0.03 + Math.random()*0.07;
+      d.style.filter='blur(30px)'; d.style.pointerEvents='none';
+      root.appendChild(d);
+      const dur = 10000 + Math.random()*20000;
+      d.animate([{transform:'translateY(0px)'},{transform:`translateY(${30+Math.random()*120}px)`},{transform:'translateY(0px)'}],{duration:dur,iterations:Infinity,easing:'ease-in-out'});
+    }
+  })();
+
+  // Music control
+  const music = document.getElementById('bg-music');
+  const musicToggle = document.getElementById('music-toggle');
+  musicToggle.addEventListener('click', () => {
+    if (music.paused) { music.play().catch(()=>{}); musicToggle.innerHTML='<i class="fas fa-pause"></i>'; } 
+    else { music.pause(); musicToggle.innerHTML='<i class="fas fa-play"></i>'; }
+  });
+
+  // Modal handling
+  const modalRoot = document.getElementById('modal-root');
+  const modalBody = document.getElementById('modal-body');
+  const modalTitle = document.getElementById('modal-title');
+  $('#btn-show-login').addEventListener('click', ()=>openModal('login'));
+  $('#btn-show-register').addEventListener('click', ()=>openModal('register'));
+  $('#modal-close').addEventListener('click', closeModal);
+
+  function openModal(mode='login'){
+    modalRoot.classList.remove('hidden'); modalRoot.style.display='flex';
+    if (mode==='login') showLoginForm(); else showRegisterForm();
+  }
+  function closeModal(){ modalRoot.classList.add('hidden'); modalRoot.style.display='none'; }
+
+  // Auth helpers
+  function storeTokens(access, refresh) {
+    localStorage.setItem('fy_access', access);
+    localStorage.setItem('fy_refresh', refresh);
+  }
+  function clearTokens() {
+    localStorage.removeItem('fy_access'); localStorage.removeItem('fy_refresh');
+  }
+  function getAccess() { return localStorage.getItem('fy_access'); }
+  function getRefresh(){ return localStorage.getItem('fy_refresh'); }
+
+  async function apiFetch(path, opts = {}) {
+    opts.headers = opts.headers || {};
+    if (getAccess()) opts.headers['Authorization'] = 'Bearer ' + getAccess();
+    const res = await fetch((API_ROOT || '') + path, opts);
+    if (res.status === 401) {
+      // try refresh token flow once
+      const refreshed = await refreshTokens();
+      if (refreshed) {
+        opts.headers['Authorization'] = 'Bearer ' + getAccess();
+        return fetch((API_ROOT || '') + path, opts);
+      }
+    }
+    return res;
+  }
+
+  async function refreshTokens(){
+    const refresh = getRefresh();
+    if (!refresh) return false;
+    try {
+      const res = await fetch((API_ROOT || '') + '/auth/refresh', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ refreshToken: refresh })
+      });
+      if (!res.ok) { clearTokens(); updateUiForSignedOut(); return false; }
+      const j = await res.json();
+      storeTokens(j.accessToken, j.refreshToken);
+      return true;
+    } catch(e){ console.error('refresh failed', e); clearTokens(); updateUiForSignedOut(); return false; }
+  }
+
+  // Show login form
+  function showLoginForm(){
+    modalTitle.textContent = 'Sign In';
+    modalBody.innerHTML = `
+      <div class="space-y-3">
+        <input id="login-email" placeholder="Email" />
+        <input id="login-pass" type="password" placeholder="Password" />
+        <div class="flex gap-2">
+          <button id="login-do" class="btn btn-primary">Sign In</button>
+          <button id="login-discord" class="btn btn-ghost">Discord</button>
+        </div>
+        <div id="login-msg" class="small-muted"></div>
+      </div>
+    `;
+    document.getElementById('login-do').addEventListener('click', doLogin);
+    document.getElementById('login-discord').addEventListener('click', ()=> { window.open((API_ROOT||'') + '/auth/discord', '_blank', 'width=600,height=800'); });
+  }
+
+  function showRegisterForm(){
+    modalTitle.textContent = 'Create Account';
+    modalBody.innerHTML = `
+      <div class="space-y-3">
+        <input id="reg-email" placeholder="Email" />
+        <input id="reg-username" placeholder="Username (optional)" />
+        <input id="reg-pass" type="password" placeholder="Password" />
+        <div class="flex gap-2">
+          <button id="reg-do" class="btn btn-primary">Create</button>
+          <button id="reg-discord" class="btn btn-ghost">Discord</button>
+        </div>
+        <div id="reg-msg" class="small-muted"></div>
+      </div>
+    `;
+    document.getElementById('reg-do').addEventListener('click', doRegister);
+    document.getElementById('reg-discord').addEventListener('click', ()=> { window.open((API_ROOT||'') + '/auth/discord', '_blank', 'width=600,height=800'); });
+  }
+
+  // Auth actions
+  async function doRegister(){
+    const email = $('#reg-email').value.trim();
+    const username = $('#reg-username').value.trim();
+    const password = $('#reg-pass').value;
+    if (!email || !password) { $('#reg-msg').textContent = 'Email and password required'; return; }
+    $('#reg-msg').textContent = 'Creating...';
+    try {
+      const res = await fetch((API_ROOT||'') + '/auth/register', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password, username })
+      });
+      const j = await res.json();
+      if (!res.ok) { $('#reg-msg').textContent = j.error || 'Failed'; return; }
+      storeTokens(j.accessToken, j.refreshToken);
+      closeModal();
+      await updateUiAfterLogin();
+    } catch (e) {
+      $('#reg-msg').textContent = 'Network error';
+      console.error(e);
+    }
+  }
+
+  async function doLogin(){
+    const email = $('#login-email').value.trim();
+    const password = $('#login-pass').value;
+    if (!email || !password) { $('#login-msg').textContent = 'Email and password required'; return; }
+    $('#login-msg').textContent = 'Signing in...';
+    try {
+      const res = await fetch((API_ROOT||'') + '/auth/login', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password })
+      });
+      const j = await res.json();
+      if (!res.ok) { $('#login-msg').textContent = j.error || 'Failed'; return; }
+      storeTokens(j.accessToken, j.refreshToken);
+      closeModal();
+      await updateUiAfterLogin();
+    } catch (e) {
+      $('#login-msg').textContent = 'Network error';
+      console.error(e);
+    }
+  }
+
+  async function doLogout(){
+    const refresh = getRefresh();
+    try {
+      await fetch((API_ROOT||'') + '/auth/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ refreshToken: refresh }) });
+    } catch(e){}
+    clearTokens();
+    updateUiForSignedOut();
+  }
+
+  // UI effects for signed in/out
+  async function updateUiAfterLogin(){
+    // replace top controls
+    const user = await getMe();
+    if (!user) { updateUiForSignedOut(); return; }
+    $('#auth-controls').innerHTML = `<div class="small-muted">Hi, ${user.username || user.email}</div><button id="top-logout" class="btn btn-ghost">Sign Out</button>`;
+    $('#top-logout').addEventListener('click', doLogout);
+    $('#account-box').innerHTML = `<div class="font-semibold">${user.username || user.email}</div><div class="small-muted">Role: ${user.role || 'user'}</div>`;
+    document.getElementById('account-actions').classList.remove('hidden');
+    // load scripts and activity
+    await loadScripts();
+    await loadActivity();
+    // if admin, show admin ALU
+    if (user.role === 'admin') {
+      document.getElementById('admin-alu').classList.remove('hidden');
+      await loadAluLogs();
+    } else document.getElementById('admin-alu').classList.add('hidden');
+  }
+
+  function updateUiForSignedOut(){
+    $('#auth-controls').innerHTML = `<button id="btn-show-login" class="btn btn-primary">Sign In</button><button id="btn-show-register" class="btn btn-ghost">Sign Up</button>`;
+    $('#btn-show-login').addEventListener('click', ()=>openModal('login'));
+    $('#btn-show-register').addEventListener('click', ()=>openModal('register'));
+    $('#account-box').innerHTML = `<div class="small-muted">Not signed in</div>`;
+    document.getElementById('account-actions').classList.add('hidden');
+    document.getElementById('scripts-list').innerHTML = '<div class="small-muted">Sign in to see your stored scripts.</div>';
+    document.getElementById('activity-list').textContent = 'Sign in to see activity.';
+    document.getElementById('alu-logs').innerHTML = '';
+  }
+
+  // Get current user
+  async function getMe(){
+    const access = getAccess(); if(!access) return null;
+    try {
+      const res = await apiFetch('/auth/me'); if(!res.ok) { clearTokens(); updateUiForSignedOut(); return null; }
+      return await res.json();
+    } catch(e){ console.error(e); return null; }
+  }
+
+  // Obfuscate / Store
+  $('#file-upload').addEventListener('change', (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader(); r.onload = ()=> $('#lua-input').value = r.result; r.readAsText(f);
+  });
+
+  $('#btn-obfuscate').addEventListener('click', async ()=>{
+    const code = $('#lua-input').value;
+    if (!code.trim()) { setStatus('Paste Lua code first', true); return; }
+    setStatus('Obfuscating...');
+    const res = await apiFetch('/obfuscate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, preset: $('#preset').value }) });
+    if (!res.ok) {
+      const j = await res.json();
+      setStatus('Failed: '+ (j.error||'server error'), true);
+      return;
+    }
+    const j = await res.json();
+    $('#lua-output').value = j.obfuscatedCode || j.obfuscated || '';
+    setStatus('Obfuscation complete');
+  });
+
+  $('#btn-store').addEventListener('click', async ()=>{
+    const script = $('#lua-input').value;
+    if (!script.trim()) { setStatus('Paste Lua code first', true); return; }
+    setStatus('Storing script...');
+    const res = await apiFetch('/obfuscate-and-store', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ script, preset: $('#preset').value }) });
+    const j = await res.json();
+    if (!res.ok) { setStatus('Store failed: '+(j.error||'server error'), true); return; }
+    // show loader
+    const key = j.key;
+    const url = (API_ROOT||'') + '/retrieve/' + key;
+    const loader = `loadstring(game:HttpGet("${url}"))()`;
+    $('#lua-output').value = loader;
+    setStatus('Stored ✓ Key: ' + key);
+    await loadScripts();
+  });
+
+  // Copy / Download actions
+  $('#btn-copy-loader').addEventListener('click', ()=> {
+    const out = $('#lua-output').value;
+    if (!out) { $('#output-msg').textContent = 'Nothing to copy'; return; }
+    navigator.clipboard.writeText(out).then(()=> { $('#output-msg').textContent='Copied'; setTimeout(()=>$('#output-msg').textContent='',2000); });
+  });
+  $('#btn-download').addEventListener('click', ()=> {
+    const out = $('#lua-output').value;
+    if (!out) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out],{type:'text/plain'})); a.download = `novahub_loader_${Math.random().toString(36).slice(2,8)}.lua`; document.body.appendChild(a); a.click(); a.remove();
+  });
+  $('#btn-copy-output').addEventListener('click', ()=> {
+    const out = $('#lua-output').value||$('#lua-input').value;
+    if (!out) return;
+    navigator.clipboard.writeText(out).then(()=> setStatus('Copied'));
+  });
+
+  // Scripts list
+  async function loadScripts(){
+    const res = await apiFetch('/api/scripts');
+    if (!res.ok) { $('#scripts-list').innerHTML = '<div class="small-muted">No scripts or not signed in.</div>'; return; }
+    const arr = await res.json();
+    if (!arr.length) { $('#scripts-list').innerHTML = '<div class="small-muted">No stored scripts yet.</div>'; return; }
+    const container = $('#scripts-list'); container.innerHTML = '';
+    for (const s of arr) {
+      const el = document.createElement('div'); el.className='flex items-center justify-between p-2 bg-black/10 rounded';
+      const left = document.createElement('div'); left.innerHTML = `<div class="font-semibold">${s.title || s.key}</div><div class="small-muted">Uses: ${s.uses || 0} · Created: ${new Date(s.created_at).toLocaleString()}</div>`;
+      const right = document.createElement('div'); right.className='flex gap-2';
+      const loaderBtn = document.createElement('button'); loaderBtn.className='btn btn-ghost'; loaderBtn.textContent='Get Loader';
+      loaderBtn.addEventListener('click', ()=> {
+        const url = (API_ROOT||'') + '/retrieve/' + s.key;
+        $('#lua-output').value = `loadstring(game:HttpGet("${url}"))()`;
+        setStatus('Loader ready');
+      });
+      const delBtn = document.createElement('button'); delBtn.className='btn btn-ghost'; delBtn.textContent='Delete';
+      delBtn.addEventListener('click', async ()=>{
+        if(!confirm('Delete script?')) return;
+        const d = await apiFetch('/api/scripts/' + s.key, { method:'DELETE' });
+        if (!d.ok) { alert('Delete failed'); return; }
+        await loadScripts();
+      });
+      right.appendChild(loaderBtn); right.appendChild(delBtn);
+      el.appendChild(left); el.appendChild(right); container.appendChild(el);
+    }
+  }
+
+  // Activity / ALU
+  async function loadActivity(){
+    const res = await apiFetch('/api/user/activity');
+    if (!res.ok) { $('#activity-list').textContent='No activity or not signed in.'; return; }
+    const rows = await res.json();
+    const el = $('#activity-list'); el.innerHTML = '';
+    if (!rows.length) { el.textContent = 'No recent activity.'; return; }
+    for (const r of rows.slice(0,30)) {
+      const d = document.createElement('div'); d.className='py-1 border-b border-white/3 small-muted'; d.textContent = `${new Date(r.created_at).toLocaleString()} · ${r.event_type} · key=${r.script_key || '-'} · ip=${r.ip || '-'} · ua=${(r.user_agent||'').slice(0,60)}`;
+      el.appendChild(d);
+    }
+  }
+
+  async function loadAluLogs(){
+    const res = await apiFetch('/api/alu/logs');
+    if (!res.ok) { $('#alu-logs').textContent = 'No logs / not admin'; return; }
+    const rows = await res.json();
+    const el = $('#alu-logs'); el.innerHTML = '';
+    for (const r of rows.slice(0,200)) {
+      const d = document.createElement('div'); d.className='py-1 border-b border-white/3 small-muted';
+      d.textContent = `${new Date(r.created_at).toLocaleString()} · ${r.event_type} · key=${r.script_key || '-'} · ip=${r.ip || '-'} · extra=${JSON.stringify(r.extra||{})}`;
+      el.appendChild(d);
+    }
+  }
+
+  // Admin "refresh" button to reload data
+  $('#btn-me').addEventListener('click', async ()=> {
+    await updateUiAfterLogin();
+    setStatus('Refreshed');
+  });
+
+  // Discord login button in right column (opens OAuth)
+  $('#discord-login').addEventListener('click', (e)=>{
+    e.preventDefault();
+    window.open((API_ROOT||'') + '/auth/discord', '_blank', 'width=600,height=800');
+  });
+
+  // on load - wire top auth buttons
+  (function init(){
+    if (getAccess()) updateUiAfterLogin();
+    else updateUiForSignedOut();
+
+    // popup message listener for Discord OAuth (the server returns tokens via postMessage)
+    window.addEventListener('message', (ev) => {
+      try {
+        const data = ev.data;
+        if (data && data.accessToken) {
+          storeTokens(data.accessToken, data.refreshToken);
+          updateUiAfterLogin();
+          setStatus('Signed in via Discord');
+        }
+      } catch(e){}
+    }, false);
+  })();
+
+  </script>
+</body>
+  </html>
