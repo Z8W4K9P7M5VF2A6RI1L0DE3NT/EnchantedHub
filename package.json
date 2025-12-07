@@ -1,7 +1,7 @@
 {
   "name": "novahub-obfuscator-service",
   "version": "1.0.0",
-  "description": "NovaHub Obfuscator + API Service + Discord Bot",
+  "description": "NovaHub Obfuscator + API Service + Discord Presence + OAuth + Bot",
   "main": "server.js",
 
   "scripts": {
@@ -15,18 +15,26 @@
   },
 
   "dependencies": {
-  "axios": "^1.5.0",
-  "bcrypt": "^5.1.1",
-  "concurrently": "^8.2.0",
-  "cors": "^2.8.5",
-  "dotenv": "^16.3.1",
-  "express": "^4.18.2",
-  "pg": "^8.11.0",
-  "discord.js": "^14.14.0",
-  "jsonwebtoken": "^9.0.2"
-},
+    "axios": "^1.6.8",
+    "bcrypt": "^5.1.1",
+    "concurrently": "^8.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^6.11.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.12.0",
+    "discord.js": "^14.14.1",
+    "uuid": "^9.0.1"
+  },
 
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.0"
+  },
+
+  "engines": {
+    "node": "18.x"
   }
 }
