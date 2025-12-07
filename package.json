@@ -1,7 +1,7 @@
 {
   "name": "novahub-obfuscator-service",
   "version": "1.0.0",
-  "description": "NovaHub Obfuscator + API Service + Discord Presence + OAuth + Bot",
+  "description": "NovaHub Obfuscator + API Service + OAuth + Email Verification + Discord Presence",
   "main": "server.js",
 
   "scripts": {
@@ -27,7 +27,11 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.12.0",
     "discord.js": "^14.14.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "nodemailer": "^6.9.13",
+    "google-auth-library": "^9.7.0",
+    "cookie-parser": "^1.4.6",
+    "express-session": "^1.18.0"
   },
 
   "devDependencies": {
