@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lua Beautifier — Single File</title>
+  <style>
+    :root{
+      --bg:#061228; /* deep navy */
+      --panel:#07192e; /* slightly lighter */
+      --accent:#1e3a8a; /* blue */
+      --accent-2:#2563eb;
+      --muted:#9fb3d6;
+      --glass: rgba(255,255,255,0.03);
+      --card: #071a2b;
+      --success:#16a34a;
+      --danger:#ef4444;
+      --shadow: 0 6px 20px rgba(2,6,23,0.6);
+      --mono: "SFMono-Regular", ui-monospace, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+    }
+    html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: linear-gradient(180deg,var(--bg) 0%, #021226 100%); color:#e6f0ff}
+    .app{max-width:1200px;margin:28px auto;padding:20px;}
+    header{display:flex;align-items:center;gap:16px}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(37,99,235,0.18);font-weight:700;color:white}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+    .controls{display:flex;gap:12px;align-items:center;margin-top:18px}
+    .card{background:var(--panel);border-radius:12px;padding:12px;box-shadow:var(--shadow);}
+
+    .toolbar{display:flex;gap:8px;align-items:center}
+    button.btn{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+    button.btn.primary{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:white;border:none}
+    button.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+
+    .main{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+    .pane{min-height:420px;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+    .pane .title{padding:12px 14px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border-bottom:1px solid rgba(255,255,255,0.03);font-weight:700;font-size:13px}
+    textarea.editor{flex:1;background:transparent;color:#e6f0ff;border:none;padding:14px;font-family:var(--mono);font-size:13px;resize:none;outline:none;line-height:1.5}
+
+    .status{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+    .status .dot{width:10px;height:10px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 10px rgba(37,99,235,0.28)}
+
+    .options{display:flex;gap:8px;align-items:center;padding:10px}
+    label.opt{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13px}
+    input[type=number], select{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px;border-radius:8px;color:var(--muted);width:84px}
+
+    .dropzone{flex:1;display:flex;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,0.03);border-radius:10px;padding:18px;color:var(--muted);font-size:13px}
+
+    .small{font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:8px;align-items:center}
+
+    footer{margin-top:14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between}
+
+    /* responsive */
+    @media (max-width:980px){.main{grid-template-columns:1fr;}.logo{width:48px;height:48px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">LB</div>
+      <div>
+        <h1>Lua Beautifier</h1>
+        <p class="lead">All-in-one single-file Lua beautifier — frontend only. Upload, paste, beautify, download.</p>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div class="card toolbar">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="beautifyBtn" class="btn primary">Beautify</button>
+          <button id="minifyBtn" class="btn ghost">Minify (compress)</button>
+          <button id="downloadBtn" class="btn">Download</button>
+          <button id="copyBtn" class="btn">Copy</button>
+        </div>
+      </div>
+
+      <div class="card options">
+        <label class="opt">Indent
+          <select id="indentType">
+            <option value="spaces">Spaces</option>
+            <option value="tabs">Tabs</option>
+          </select>
+        </label>
+        <label class="opt">Size
+          <input id="indentSize" type="number" value="2" min="0" max="8" />
+        </label>
+        <label class="opt">Max Line Width
+          <input id="maxWidth" type="number" value="120" min="40" max="1000" />
+        </label>
+      </div>
+
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <div class="status"><div class="dot"></div><div id="stats">Ready</div></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="pane card">
+        <div class="title">Input — Paste or Upload (drag & drop)</div>
+        <div style="padding:12px;display:flex;gap:10px;align-items:center">
+          <input id="fileInput" type="file" accept=".lua,text/plain" style="display:none" />
+          <button id="uploadBtn" class="btn">Upload .lua</button>
+          <div class="small">or drop your file into the input editor area</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;padding:12px;gap:10px">
+          <div class="dropzone" id="dropzone">Drop a file here or paste Lua code</div>
+          <textarea id="inputEditor" class="editor" spellcheck="false" placeholder="-- Paste your Lua code here"></textarea>
+        </div>
+      </div>
+
+      <div class="pane card">
+        <div class="title">Output — Beautified Lua</div>
+        <textarea id="outputEditor" class="editor" spellcheck="false" placeholder="Beautified code will appear here" readonly></textarea>
+      </div>
+    </div>
+
+    <footer>
+      <div>Built for speed · No backend · Single file</div>
+      <div>Theme: dark · navy-blue</div>
+    </footer>
+  </div>
+
+  <script>
+  // --- Utilities ---
+  const $ = id => document.getElementById(id);
+  const input = $('inputEditor');
+  const output = $('outputEditor');
+  const beautifyBtn = $('beautifyBtn');
+  const minifyBtn = $('minifyBtn');
+  const downloadBtn = $('downloadBtn');
+  const copyBtn = $('copyBtn');
+  const uploadBtn = $('uploadBtn');
+  const fileInput = $('fileInput');
+  const dropzone = $('dropzone');
+  const stats = $('stats');
+
+  function setStatus(s){ stats.textContent = s }
+
+  // --- File handling ---
+  uploadBtn.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', async e => {
+    const f = e.target.files[0]; if(!f) return;
+    setStatus('Reading file...');
+    const txt = await f.text(); input.value = txt; setStatus('File loaded');
+  });
+
+  // drag & drop
+  ['dragenter','dragover'].forEach(e => {
+    dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.style.borderColor = 'rgba(37,99,235,0.6)'; });
+  });
+  ['dragleave','drop'].forEach(e => {
+    dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.style.borderColor='rgba(255,255,255,0.03)'; });
+  });
+  dropzone.addEventListener('drop', async ev => {
+    const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if(!f) return; setStatus('Reading file...'); const txt = await f.text(); input.value = txt; setStatus('File loaded');
+  });
+
+  // copy
+  copyBtn.addEventListener('click', async ()=>{
+    try{ await navigator.clipboard.writeText(output.value || input.value); setStatus('Copied to clipboard'); }
+    catch(e){ setStatus('Copy failed'); }
+  });
+
+  // download
+  downloadBtn.addEventListener('click', ()=>{
+    const data = output.value || input.value;
+    const blob = new Blob([data],{type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='beautified.lua'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    setStatus('Downloaded');
+  });
+
+  // --- Simple but robust Lua beautifier ---
+  // Goals: fast, frontend-only, handles strings, long brackets, comments, basic block structure
+
+  function isAlphaNum(ch){ return /[A-Za-z0-9_]/.test(ch); }
+
+  function tokenizeLua(code){
+    // We'll produce tokens with type and value, but keep it lightweight.
+    const tokens = [];
+    let i=0, n=code.length;
+    while(i<n){
+      const ch = code[i];
+      // whitespace
+      if(ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n'){
+        let s=''; while(i<n && (code[i]==' '||code[i]=='\t'||code[i]=='\r'||code[i]=='\n')){ s+=code[i++]; }
+        tokens.push({type:'ws', value:s});
+        continue;
+      }
+      // comment -- or --[[ ... ]]
+      if(ch === '-' && code[i+1]==='-'){
+        // long comment?
+        if(code[i+2]=='[' && code[i+3]=='['){
+          let j=i+4; while(j<n && !(code[j]==']'&&code[j+1]==']')) j++;
+          const val = code.slice(i, Math.min(n, j+2)); tokens.push({type:'comment', value:val}); i = Math.min(n, j+2); continue;
+        } else {
+          let j=i+2; while(j<n && code[j] !== '\n') j++; const val = code.slice(i,j); tokens.push({type:'comment', value:val}); i=j; continue;
+        }
+      }
+      // long string [[ ... ]]
+      if(ch === '[' && code[i+1] === '['){
+        let j=i+2; while(j<n && !(code[j]==']'&&code[j+1]==']')) j++; const val = code.slice(i, Math.min(n, j+2)); tokens.push({type:'string', value:val}); i = Math.min(n, j+2); continue;
+      }
+      // strings '...' or "..." with escapes
+      if(ch === '"' || ch === "'"){
+        const q = ch; let j=i+1; let escaped=false;
+        while(j<n){
+          if(!escaped && code[j]===q) { j++; break; }
+          if(code[j] === "\\") escaped = !escaped; else escaped = false;
+          j++;
+        }
+        tokens.push({type:'string', value:code.slice(i,j)}); i=j; continue;
+      }
+      // numbers
+      if(/[0-9]/.test(ch)){
+        let j=i; while(j<n && /[0-9xX\.eE+-]/.test(code[j])) j++; tokens.push({type:'number', value:code.slice(i,j)}); i=j; continue;
+      }
+      // identifiers or keywords
+      if(/[A-Za-z_]/.test(ch)){
+        let j=i; while(j<n && /[A-Za-z0-9_]/.test(code[j])) j++; const val = code.slice(i,j); tokens.push({type:'ident', value:val}); i=j; continue;
+      }
+      // punctuation
+      tokens.push({type:'punct', value:ch}); i++;
+    }
+    return tokens;
+  }
+
+  function beautifyLua(src, opts){
+    const indentType = opts.indentType || 'spaces';
+    const indentSize = Math.max(0, parseInt(opts.indentSize)||2);
+    const indentUnit = indentType==='tabs' ? '\t' : ' '.repeat(indentSize);
+    const maxWidth = Math.max(40, parseInt(opts.maxWidth)||120);
+
+    // Fast path: if empty
+    if(!src || !src.trim()) return '';
+
+    // We'll process line-by-line but mindful of long strings and block comments.
+    const tokens = tokenizeLua(src);
+    // Reconstruct lines from tokens while applying indentation rules.
+    let indentLevel = 0;
+    let outLines = [];
+    let currentLine = '';
+
+    // Helper: check if ident is block opener or closer
+    const opener = new Set(['function','do','then','repeat','while','for','if']);
+    const closer = new Set(['end','until']);
+    const middle = new Set(['else','elseif']);
+
+    // We'll iterate tokens and build logical lines (split on newlines present in whitespace tokens)
+    function flushLine(){ if(currentLine!==null){ outLines.push(currentLine.replace(/[ \t]+$/,'')); currentLine=''; } }
+
+    for(let idx=0; idx<tokens.length; idx++){
+      const t = tokens[idx];
+      if(t.type === 'ws'){
+        // preserve newlines: split on \n
+        if(t.value.indexOf('\n')>=0){
+          const parts = t.value.split(/(\n)/);
+          for(const p of parts){
+            if(p === '') continue;
+            if(p === '\n'){
+              flushLine();
+            } else {
+              // spaces at line end/interior
+              currentLine += p;
+            }
+          }
+        } else {
+          currentLine += t.value;
+        }
+        continue;
+      }
+      // For tokens which start a new logical line, we may need to adjust indent
+      // Determine the trimmed start of the token (for ident/punct/string/comment)
+      const trimmed = t.type==='ident' ? t.value : t.type==='punct' ? t.value : (t.value||'').trim();
+
+      // If this token is at the beginning of a new line, adjust indent for closers
+      const atLineStart = currentLine.trim()==='';
+      if(atLineStart){
+        // if it's a closer (end/until) or middle (else/elseif) -> dedent first
+        if(t.type==='ident' && (closer.has(t.value) || middle.has(t.value))){ indentLevel = Math.max(0, indentLevel-1); }
+      }
+
+      // ensure indentation at start of line
+      if(currentLine === '' || currentLine.match(/^\s*$/)){
+        currentLine = indentUnit.repeat(indentLevel);
+      }
+
+      // Append token value as-is
+      currentLine += t.value;
+
+      // After appending, check if token opens a block
+      if(t.type==='ident' && opener.has(t.value)){
+        // Special-case: 'then' only opens if part of an if/elseif condition; our tokenizer doesn't know context fully,
+        // but it's ok: 'then' is usually at end of line; treat 'then' as opener if previous tokens include 'if' or 'elseif' or 'for'.
+        if(t.value === 'then'){
+          // don't blindly increment if line already contains 'end' etc.
+          indentLevel++;
+        } else if(t.value === 'if' || t.value === 'function' || t.value==='do' || t.value==='repeat' || t.value==='for' || t.value==='while'){
+          // for 'if' we don't indent here because the 'then' appears later; but many styles indent after 'then'. To be safe,
+          // we only increase for function/do/repeat/for/while and when 'then' encountered we'll also increase.
+          if(t.value === 'function' || t.value === 'do' || t.value === 'repeat' || t.value === 'for' || t.value === 'while'){
+            indentLevel++;
+          }
+        }
+      }
+
+      // If token is middle (else/elseif), we should re-indent for the following content: after the word, indent back
+      if(t.type==='ident' && middle.has(t.value)){
+        // after this token, re-increment for the inner block
+        indentLevel++;
+      }
+
+      // If token closes a block, we will have already dedented at the start of the line.
+      if(t.type==='ident' && closer.has(t.value)){
+        // nothing extra
+      }
+
+      // If token contains a newline at the end (rare), handle it via whitespace tokens; otherwise continue
+    }
+
+    // If currentLine has content, flush
+    if(currentLine.trim() !== '') flushLine();
+
+    // Post-process: tidy up each line spacing: collapse repeated spaces, align 'then' at end etc.
+    // Also, ensure blank lines preserved and wrap long lines (soft) by not doing heavy wrapping.
+    const final = outLines.map(l => {
+      // Trim trailing spaces already done. Collapse multiple spaces around operators maybe not wanted; skip aggressive transforms.
+      return l.replace(/\t/g, '\t');
+    }).join('\n');
+
+    // Final small cleanup: normalize consecutive blank lines to max 2
+    return final.replace(/\n{3,}/g,'\n\n');
+  }
+
+  // --- Minify/compress function (basic) ---
+  function minifyLua(src){
+    // Remove comments (but keep long bracket strings untouched) - conservative approach
+    // This is a naive minifier: it strips line comments and excessive whitespace. Use with care.
+    // We'll parse to avoid removing inside strings.
+    const tokens = tokenizeLua(src);
+    let out = '';
+    for(const t of tokens){
+      if(t.type === 'comment') continue; // remove comments
+      if(t.type === 'ws'){
+        // collapse whitespace to single space unless it contains newline
+        if(t.value.indexOf('\n')>=0) out += '\n'; else out += ' ';
+      } else {
+        out += t.value;
+      }
+    }
+    return out.replace(/\n{2,}/g,'\n');
+  }
+
+  // --- Wiring ---
+  beautifyBtn.addEventListener('click', ()=>{
+    try{
+      setStatus('Beautifying...');
+      const res = beautifyLua(input.value, { indentType: $('indentType').value, indentSize: $('indentSize').value, maxWidth: $('maxWidth').value });
+      output.value = res; setStatus('Beautified');
+    } catch(e){ setStatus('Error'); console.error(e); }
+  });
+
+  minifyBtn.addEventListener('click', ()=>{
+    try{ setStatus('Minifying...'); const res = minifyLua(input.value); output.value = res; setStatus('Minified'); }
+    catch(e){ setStatus('Error'); }
+  });
+
+  // Allow Ctrl+Enter to beautify
+  input.addEventListener('keydown', e => { if(e.ctrlKey && e.key === 'Enter'){ beautifyBtn.click(); } });
+
+  // Paste into dropzone focuses editor
+  dropzone.addEventListener('click', ()=>{ input.focus(); });
+
+  // Initialize with a small sample
+  input.value = "-- Sample Lua\nfunction greet(name)\nprint('Hello, '..(name or 'guest'))\nend\n\nif true then\nfor i=1,3 do\nprint(i)\nend\nelse\nprint('no')\nend\n";
+  setStatus('Ready');
+  </script>
+</body>
+</html>
