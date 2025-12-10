@@ -1,22 +1,22 @@
 FROM node:22-slim
 
-# 1. Install Lua 5.1 and its dependencies
+# 1. Install Lua 5.1
 RUN apt-get update && \
     apt-get install -y --no-install-recommends lua5.1 && \
     rm -rf /var/lib/apt/lists/*
 
-# 2. Set the working directory
+# 2. Set working directory
 WORKDIR /usr/src/app
 
-# 3. Copy package.json and install Node dependencies
+# 3. Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# 4. Copy the rest of the application code
+# 4. Copy the rest of the code
 COPY . .
 
-# 5. Expose the port (Render will use this)
-EXPOSE 3000
+# 5. Expose your API port
+EXPOSE 10000
 
-# 6. Define the command to start the app
-CMD [ "npm", "start" ]
+# 6. Start both server and bot
+CMD ["npx", "concurrently", "npm:start", "npm:bot"]
