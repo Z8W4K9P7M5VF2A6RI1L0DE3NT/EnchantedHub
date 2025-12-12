@@ -1,6 +1,8 @@
 // =======================================================
-// NovaHub Backend (Obfuscation + Storage)
-// Full Updated Version (API-SERVICE.html Added)
+// Enchanted Hub Backend (Obfuscation + Storage)
+// Full Updated Version
+// Obfuscate: /v1/obfuscate/auth
+// Retrieve:  /v1/api/auth/:key
 // =======================================================
 
 const express = require("express");
@@ -18,6 +20,7 @@ const port = process.env.PORT || 3000;
 // --------------------- Payload Limits ---------------------
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
+app.use(cors());
 
 // --------------------- Postgres Connection ---------------------
 const pool = new Pool({
@@ -29,7 +32,8 @@ pool.connect((err, client, done) => {
         console.error("DB Connection Failed:", err.stack);
         return;
     }
-    console.log("Connected to PostgreSQL.");
+
+    console.log("Connected to PostgreSQL (Enchanted Hub).");
 
     const tableSQL = `
         CREATE TABLE IF NOT EXISTS scripts (
@@ -42,11 +46,9 @@ pool.connect((err, client, done) => {
     client.query(tableSQL, (err) => {
         done();
         if (err) console.error("Table Creation Error:", err.stack);
-        else console.log("DB Table Ready.");
+        else console.log("DB Table Ready (Enchanted Hub).");
     });
 });
-
-app.use(cors());
 
 // --------------------- Static Folder ---------------------
 app.use(express.static("public"));
@@ -57,16 +59,16 @@ app.get("/API-SERVICE.html", (req, res) => {
 });
 
 // --------------------- Constants ---------------------
-const WATERMARK = "--[[ v0.1.0 NovaHub Lua Obfuscator ]] ";
+const WATERMARK = "--[[\n\n </> Enchanted Hub Lua Obfuscator\n\n ";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw Lua. Check your syntax. ]] ";
 
 const generateUniqueId = () => crypto.randomBytes(16).toString("hex");
 const applyFallback = (raw) => `${FALLBACK_WATERMARK}\n${raw}`;
 
 // =======================================================
-// ===============  /obfuscate (NO STORAGE) ===============
+// ======  /v1/obfuscate/auth (NO STORAGE) =================
 // =======================================================
-app.post("/obfuscate", async (req, res) => {
+app.post("/v1/obfuscate/auth", async (req, res) => {
     const rawLua = req.body.code;
     const preset = "Medium";
     const timestamp = Date.now();
@@ -88,17 +90,13 @@ app.post("/obfuscate", async (req, res) => {
 
                 if (err || stderr) {
                     console.error("Obfuscator Error:", err?.message || stderr);
-
                     if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
-
                     obfuscated = applyFallback(rawLua);
-                    success = false;
                     return resolve();
                 }
 
                 if (!fs.existsSync(outputFile)) {
                     obfuscated = applyFallback(rawLua);
-                    success = false;
                     return resolve();
                 }
 
@@ -106,10 +104,10 @@ app.post("/obfuscate", async (req, res) => {
                 obfuscated = WATERMARK + obfuscated;
                 fs.unlinkSync(outputFile);
                 success = true;
-
                 resolve();
             });
         });
+
     } catch (err) {
         console.error("FS/Exec Error:", err);
         obfuscated = applyFallback(rawLua);
@@ -143,17 +141,13 @@ app.post("/obfuscate-and-store", async (req, res) => {
 
                 if (err || stderr) {
                     console.error("Obfuscator Error:", err?.message || stderr);
-
                     if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
-
                     obfuscated = applyFallback(rawLua);
-                    success = false;
                     return resolve();
                 }
 
                 if (!fs.existsSync(outputFile)) {
                     obfuscated = applyFallback(rawLua);
-                    success = false;
                     return resolve();
                 }
 
@@ -161,10 +155,10 @@ app.post("/obfuscate-and-store", async (req, res) => {
                 obfuscated = WATERMARK + obfuscated;
                 fs.unlinkSync(outputFile);
                 success = true;
-
                 resolve();
             });
         });
+
     } catch (err) {
         console.error("Error:", err);
         obfuscated = applyFallback(rawLua);
@@ -186,9 +180,9 @@ app.post("/obfuscate-and-store", async (req, res) => {
 });
 
 // =======================================================
-// ======  /retrieve/:key → Roblox Only ===================
+// ======  /v1/api/auth/:key → Roblox Only =================
 // =======================================================
-app.get("/retrieve/:key", async (req, res) => {
+app.get("/v1/api/auth/:key", async (req, res) => {
     const key = req.params.key;
     const ua = req.headers["user-agent"];
 
@@ -220,10 +214,12 @@ app.get("/retrieve/:key", async (req, res) => {
 // Root
 // =======================================================
 app.get("/", (req, res) => {
-    res.send("NovaHub Backend Running.");
+    res.send("Enchanted Hub Backend Running.");
 });
 
 // =======================================================
 // Start Server
 // =======================================================
-app.listen(port, () => console.log(`NovaHub API running on port ${port}`));
+app.listen(port, () => {
+    console.log(`Enchanted Hub API running on port ${port}`);
+});
