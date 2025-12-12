@@ -1,8 +1,5 @@
 // =======================================================
 // Enchanted Hub Backend (Obfuscation + Storage)
-// Full Updated Version
-// Obfuscate: /v1/obfuscate/auth
-// Retrieve:  /v1/api/auth/:key
 // =======================================================
 
 const express = require("express");
@@ -22,9 +19,10 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 app.use(cors());
 
-// --------------------- Postgres Connection ---------------------
+// --------------------- PostgreSQL (Render Compatible) ---------------------
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false } // REQUIRED for Render PostgreSQL
 });
 
 pool.connect((err, client, done) => {
@@ -59,7 +57,7 @@ app.get("/API-SERVICE.html", (req, res) => {
 });
 
 // --------------------- Constants ---------------------
-const WATERMARK = "--[[\n\n </> Enchanted Hub Lua Obfuscator\n\n ";
+const WATERMARK = "--[[\n\n </> Enchanted Hub Lua Obfuscator\n\n--[[";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw Lua. Check your syntax. ]] ";
 
 const generateUniqueId = () => crypto.randomBytes(16).toString("hex");
@@ -117,7 +115,7 @@ app.post("/v1/obfuscate/auth", async (req, res) => {
 });
 
 // =======================================================
-// ======  /obfuscate-and-store → RETURN key ==============
+// ======  /obfuscate-and-store → RETURNS key ==============
 // =======================================================
 app.post("/obfuscate-and-store", async (req, res) => {
     const rawLua = req.body.script;
