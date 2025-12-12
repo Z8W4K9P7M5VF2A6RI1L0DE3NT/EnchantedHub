@@ -1,29 +1,22 @@
 {
-  "name": "novahub-obfuscator-service",
+  "name": "enchanted-hub-backend",
   "version": "1.0.0",
-  "description": "NovaHub Obfuscator (API + Discord bot)",
+  "description": "Enchanted Hub Backend (Lua Obfuscation + Script Storage + Roblox API Auth)",
   "main": "server.js",
   "scripts": {
-    "start": "concurrently \"npm run start:web\" \"npm run start:bot\" \"npm run start:ast\"",
-    "start:web": "node server.js",
-    "start:bot": "node bot.js",
-    "start:ast": "node app.js",
-    "dev:web": "nodemon server.js",
-    "dev:bot": "nodemon bot.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "author": "NovaHub",
-  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "axios": "^1.5.0",
-    "concurrently": "^8.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "pg": "^8.11.0",
-    "discord.js": "^14.14.0",
-    "node-fetch": "^2.6.7"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.0"
   }
 }
