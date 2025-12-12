@@ -6,301 +6,165 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#060405; --card:#0f1112; --muted:#9aa1a6;
-    --accent:#ff3b3b; --accent-2:#ff8a8a; --glass: rgba(255,255,255,0.04);
-    --glass-2: rgba(255,255,255,0.02);
-    --radius:14px; --container-max:1200px;
+    --bg:#0b0d0f;
+    --sidebar:#0f1113;
+    --card:#121416;
+    --muted:#98a0a6;
+    --accent:#7c5cff; /* purple accent like example */
+    --accent-2:#6b3bff;
+    --glass: rgba(255,255,255,0.03);
+    --radius:12px;
+    --container-max:1200px;
   }
   *{box-sizing:border-box}
-  html,body{height:100%;}
-  body{
-    margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;
-    background: radial-gradient(ellipse at 10% 10%, rgba(255,59,59,0.03), transparent 8%),
-                linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.8)),
-                var(--bg);
-    color:#e9eef0; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-    padding:28px; -webkit-tap-highlight-color: transparent;
-  }
-  .wrap{max-width:var(--container-max);margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:start}/* SIDEBAR */ .sidebar{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:18px;padding:22px;border:1px solid rgba(255,255,255,0.02);backdrop-filter:blur(8px);box-shadow:0 10px 40px rgba(0,0,0,0.6)} .brand{display:flex;gap:12px;align-items:center} .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#12090a} .brand h1{font-size:18px;margin:0} .brand p{margin:0;color:var(--muted);font-size:13px} .nav{margin-top:22px;display:flex;flex-direction:column;gap:8px} .nav a{color:#fff;text-decoration:none;padding:10px 12px;border-radius:10px;background:transparent;border:1px solid transparent;transition:all .14s ease;font-weight:600} .nav a.active{background:linear-gradient(90deg, rgba(255,59,59,0.08), rgba(255,138,138,0.02));transform:translateX(6px)} .nav a:hover{background:linear-gradient(90deg, rgba(255,59,59,0.06), rgba(255,138,138,0.02));transform:translateX(6px)}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#e6eef6;background:var(--bg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.app{display:flex;min-height:100vh} /* SIDEBAR */ .sidebar{width:220px;background:linear-gradient(180deg,var(--sidebar),#0b0c0e);padding:18px;border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:18px} .brand{display:flex;gap:12px;align-items:center} .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff} .brand h1{font-size:16px;margin:0} .brand p{margin:0;color:var(--muted);font-size:12px} .nav{display:flex;flex-direction:column;gap:6px;margin-top:8px} .nav button{background:transparent;border:none;color:#cfe3ff;padding:10px;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px} .nav button.active{background:linear-gradient(90deg, rgba(124,92,255,0.12), rgba(107,59,255,0.04));transform:translateX(4px)} .small-muted{font-size:12px;color:var(--muted)}
 
-/* MAIN */ .main{padding:6px} .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px} .h-title{font-size:22px;font-weight:800} .h-sub{color:var(--muted)}
+.signin{margin-top:auto} .signin button{width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white;font-weight:700;cursor:pointer}
 
-/* GRID CARDS */ .grid{display:grid;grid-template-columns:1fr 420px;gap:20px} .card{background:linear-gradient(180deg,var(--card),rgba(15,15,15,0.9));padding:20px;border-radius:14px;border:1px solid var(--glass);box-shadow:0 8px 30px rgba(0,0,0,0.6)} .card h3{margin:0 0 8px 0} .muted{color:var(--muted);font-size:14px}
+/* MAIN */ .main{flex:1;padding:20px;max-width:calc(100% - 220px)} .header{display:flex;justify-content:space-between;align-items:center;gap:12px} .page-title{font-size:20px;font-weight:800} .search{width:280px;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:#e6eef6}
 
-/* About & Owner */ .owner{display:flex;gap:18px;align-items:center} .owner .pfp{width:120px;height:120px;border-radius:18px;overflow:hidden;border:3px solid rgba(255,59,59,0.16);box-shadow:0 8px 30px rgba(255,59,59,0.06)} .owner .pfp img{width:100%;height:100%;object-fit:cover} .owner .meta h1{margin:0;font-size:28px;color:var(--accent);letter-spacing:0.4px} .owner .meta p{margin:6px 0 0 0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px} .card{background:linear-gradient(180deg,var(--card),rgba(10,10,12,0.6));padding:18px;border-radius:12px;border:1px solid var(--glass);box-shadow:0 10px 30px rgba(0,0,0,0.6)} .card h3{margin:0 0 10px 0} .stats{display:flex;gap:12px} .stat{flex:1;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px} .stat h4{margin:0;font-size:14px;color:var(--muted)} .stat p{margin:6px 0 0 0;font-weight:800;font-size:18px}
 
-/* User Dashboard */ .field{display:block;margin-top:10px} input, textarea{width:100%;padding:12px;border-radius:10px;background:var(--glass-2);border:1px solid rgba(255,255,255,0.03);color:inherit;font-size:14px} .btn{display:inline-flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:var(--accent);border:none;color:#12090a;font-weight:700;cursor:pointer;transition:all .12s} .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);font-weight:600}
+/* scripts list */ .scripts-list{display:flex;flex-direction:column;gap:8px} .script-item{padding:10px;border-radius:8px;background:rgba(0,0,0,0.25);display:flex;justify-content:space-between;align-items:center} .script-item .meta{display:flex;flex-direction:column} .script-item .meta .title{font-weight:700} .script-item .meta .sub{font-size:12px;color:var(--muted)} .cta{display:inline-flex;gap:8px} .btn{padding:8px 12px;border-radius:8px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer} .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
 
-/* Update Log */ .updates-list{display:flex;flex-direction:column;gap:12px} .update{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)} .update h4{margin:0 0 6px 0} .tag{display:inline-block;padding:6px 8px;border-radius:8px;background:rgba(255,59,59,0.12);color:var(--accent);font-weight:700;font-size:12px}
-
-/* helpers */ .monos{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(0,0,0,0.35);padding:8px;border-radius:8px}
-
-@media (max-width:980px){.wrap{grid-template-columns:1fr;}.grid{grid-template-columns:1fr}} .fade-in{opacity:0;transform:translateY(8px);animation:fadeIn .6s forwards} @keyframes fadeIn{to{opacity:1;transform:none}} </style>
+/* responsive */ @media (max-width:900px){.sidebar{display:none}.main{padding:12px}.grid{grid-template-columns:1fr}} </style>
 
 </head>
 <body>
-<div class="wrap">
-  <aside class="sidebar fade-in">
-    <div class="brand">
-      <div class="logo">EH</div>
-      <div>
-        <h1>Enchanted Hub</h1>
-        <p>Obfuscation & Storage · Dashboard</p>
-      </div>
-    </div><nav class="nav">
-  <a href="#owner" class="active">Owner</a>
-  <a href="#about">About Me</a>
-  <a href="#user">User Dashboard</a>
-  <a href="#obfuscate">Obfuscate</a>
-  <a href="#store">Store & Loader</a>
-  <a href="#retrieve">Retrieve</a>
-  <a href="#updates">Update Log</a>
-  <a href="#docs">API Docs</a>
+<div class="app">
+  <aside class="sidebar" aria-label="Sidebar">
+    <div class="brand"><div class="logo">EH</div><div><h1>Enchanted Hub</h1><p class="small-muted">Dashboard</p></div></div><nav class="nav" id="mainNav">
+  <button class="active" data-view="home">🏠 Home</button>
+  <button data-view="obfuscate">🛠️ Obfuscator</button>
+  <button data-view="loader">📦 Script Loader</button>
+  <button data-view="myscripts">📜 My Scripts</button>
+  <button data-view="info">ℹ️ Info</button>
+  <button data-view="settings">⚙️ Settings</button>
+  <button data-view="updates">📝 Update Log</button>
 </nav>
 
-<div style="margin-top:20px" class="muted">
-  <div style="display:flex;justify-content:space-between;align-items:center"><strong>Theme</strong><span class="tag">Dark</span></div>
-  <div style="margin-top:12px;font-size:13px;color:var(--muted)">Connected: <span id="status-conn">Unknown</span></div>
-</div>
+<div class="signin"><button id="discordSign">Sign in with Discord</button></div>
+<div class="small-muted" style="margin-top:10px">Signed in: <span id="signedInUser">Not signed in</span></div>
 
   </aside>  <main class="main">
-    <div class="header fade-in">
+    <div class="header">
       <div>
-        <div class="h-title">Dashboard</div>
-        <div class="h-sub">A polished, clean, and smooth control panel for Enchanted Hub</div>
+        <div class="page-title">Dashboard</div>
+        <div class="small-muted">Welcome to Enchanted Hub</div>
       </div>
-      <div>
-        <button class="btn" id="check-api">Check API</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="search" placeholder="Search..." id="searchInput">
+        <button class="btn ghost" id="mobileMenu">☰</button>
       </div>
-    </div><!-- OWNER -->
-<section id="owner" class="card fade-in">
-  <div class="owner">
-    <div class="pfp"><img id="ownerAvatar" src="" alt="Owner"></div>
-    <div class="meta">
-      <h1>iblameaabis</h1>
-      <p>Frontend || Backend Developer & UI/UX Designer</p>
-      <div style="height:10px"></div>
-      <div class="muted">Discord: <strong>iblameaabis</strong> • ID: <code>1256872580514709546</code></div>
-    </div>
-  </div>
-</section>
-
-<!-- ABOUT -->
-<section id="about" class="card about fade-in" style="margin-top:16px">
-  <h3>About Me</h3>
-  <p>I build fast, reliable tooling for developers — focusing on Lua scripting, obfuscation, and web integrations. I enjoy building clean UI and designing smooth experiences that make tools feel premium.</p>
-</section>
-
-<!-- USER DASHBOARD -->
-<section id="user" class="card fade-in" style="margin-top:16px">
-  <h3>User Dashboard</h3>
-  <div class="muted">Manage your account, generate API keys, and view usage.</div>
-  <div style="height:12px"></div>
-
-  <div style="display:grid;grid-template-columns:1fr 300px;gap:12px;align-items:start">
-    <div>
-      <label class="muted field">Username</label>
-      <input id="user-name" placeholder="Enter username..." />
-
-      <label class="muted field">Email (optional)</label>
-      <input id="user-email" placeholder="you@example.com" />
-
-      <!-- Email verification has been removed from the main UI and will be added in the next update -->
-
-      <label class="muted field">API Key</label>
-      <div style="display:flex;gap:8px"><input id="user-apikey" placeholder="Your API key" /><button class="btn secondary" id="btn-gen">Generate</button></div>
-
-      <div style="height:12px"></div>
-      <button class="btn" id="btn-save-user">Save Profile</button>
+    </div><div class="grid">
+  <section class="card">
+    <h3>Last Data</h3>
+    <div style="height:14px"></div>
+    <div class="stats">
+      <div class="stat"><h4>Authenticated</h4><p id="stat-auth">—</p></div>
+      <div class="stat"><h4>Disputed</h4><p id="stat-disputed">—</p></div>
+      <div class="stat"><h4>Scripts</h4><p id="stat-scripts">—</p></div>
     </div>
 
-    <div>
-      <div style="background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:12px;border-radius:10px">
-        <div class="muted">Usage</div>
-        <div style="font-size:22px;font-weight:800;color:#fff;margin-top:6px">12 / 1000</div>
-        <div class="muted" style="margin-top:8px">Requests used / monthly quota</div>
-      </div>
-
-      <div style="height:12px"></div>
-      <div class="muted">Recent Activity</div>
-      <div style="background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:10px;border-radius:8px;margin-top:8px">
-        <div style="font-size:13px">Obfuscate called: 2025-12-09 21:05</div>
-        <div style="font-size:13px">Store called: 2025-12-09 21:12</div>
-      </div>
+    <div style="height:16px"></div>
+    <h4 style="margin:0 0 8px 0">Quick Actions</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="goObf">Obfuscate Code</button>
+      <button class="btn ghost" id="goStore">Store Script</button>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- TOOLS -->
-<div class="grid" style="margin-top:18px">
-  <div class="card fade-in" id="obfuscate">
-    <h3>Obfuscate — Quick</h3>
-    <div class="muted">Paste Lua source below and press <strong>Obfuscate</strong>.</div>
-    <div style="height:12px"></div>
-    <textarea id="lua-input" rows="10" placeholder="Paste Lua code...">-- Simple Example
-
-local health = 100 function checkHealth(dmg) health = health - dmg if health <= 0 then print('Player died!') end end
-
-checkHealth(50) checkHealth(60)</textarea> <div style="height:12px"></div> <div style="display:flex;gap:10px"> <button class="btn" id="obfuscate-button">Obfuscate Code</button> <button class="btn secondary" id="btn-copy-out">Copy Output</button> <button class="btn secondary" id="btn-download">Download</button> </div> <div style="height:14px"></div> <div class="muted">Output</div> <textarea id="lua-output" rows="8" class="monos" readonly placeholder="Obfuscated code will appear here..."></textarea> </div>
-
-<div class="card fade-in" id="store">
-    <h3>Store & Generate Loader</h3>
-    <div class="muted">Store the obfuscated script on the server and get a loader URL.</div>
-    <div style="height:12px"></div>
-    <textarea id="lua-store-source" rows="8" placeholder="Paste obfuscated code to store (or leave empty to store latest output)"></textarea>
+  <aside class="card">
+    <h3>Quick stats</h3>
     <div style="height:10px"></div>
-    <div style="display:flex;gap:10px">
-      <button class="btn" id="btn-store">Store Script</button>
-      <button class="btn secondary" id="btn-copy-loader">Copy Loader</button>
-    </div>
+    <div class="muted">Overview</div>
     <div style="height:12px"></div>
-    <input id="loader-output" class="monos" readonly placeholder="Loader will appear here"/>
-  </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between"><div class="small-muted">Authenticated</div><div id="mini-auth">—</div></div>
+      <div style="display:flex;justify-content:space-between"><div class="small-muted">Disputed</div><div id="mini-disputed">—</div></div>
+      <div style="display:flex;justify-content:space-between"><div class="small-muted">Scripts</div><div id="mini-scripts">—</div></div>
+    </div>
+  </aside>
 </div>
 
-<div class="grid" style="margin-top:18px">
-  <div class="card fade-in" id="retrieve">
-    <h3>Retrieve Script (for testing)</h3>
-    <div class="muted">Enter a key to fetch the script. Roblox user-agent check is enforced server-side.</div>
-    <div style="height:10px"></div>
-    <input id="retrieve-key" placeholder="Enter key..." />
-    <div style="height:10px"></div>
-    <div style="display:flex;gap:10px">
-      <button class="btn" id="btn-retrieve">Retrieve</button>
-      <button class="btn secondary" id="btn-copy-retrieved">Copy</button>
-    </div>
-    <div style="height:12px"></div>
-    <textarea id="retrieve-output" rows="8" class="monos" readonly placeholder="Retrieved script will appear here"></textarea>
-  </div>
-
-  <div class="card fade-in" id="services">
-    <h3>My Services</h3>
-    <p class="muted">Script Development — Making Lua scripts that work properly and perform well.</p>
-    <div style="height:12px"></div>
-    <ul class="muted">
-      <li>Custom script development (Roblox)</li>
-      <li>Lua obfuscation and packaging</li>
-      <li>Web tooling & integrations</li>
-    </ul>
-  </div>
-</div>
-
-<!-- UPDATE LOG -->
-<section id="updates" class="card fade-in" style="margin-top:18px">
-  <h3>Update Log</h3>
-  <div class="updates-list">
-
-    <div class="update">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h4>v1.4 — Security Expansion Patch</h4>
-        <span class="tag">Stable</span>
-      </div>
-      <p class="muted">Released: 2025-12-10</p>
-      <ul>
-        <li><strong>Added:</strong> Update Log tab to track releases and planned features.</li>
-        <li><strong>Added:</strong> Design placeholders and backend hooks for an upcoming <em>Email Verification</em> feature (disabled in main UI for now).</li>
-        <li><strong>Improved:</strong> UX and performance of obfuscation flow, clearer status messages and error handling.</li>
-        <li><strong>Improved:</strong> Loader generation security — loader URLs now reference the versioned API endpoint.</li>
-        <li><strong>Fixed:</strong> Minor UI bugs and layout issues on mobile.</li>
-      </ul>
-      <p class="muted"><strong>Notes:</strong> Email verification and encrypted script vaults are removed from the main UI for now and will be implemented in v1.5 to better protect users' scripts.</p>
-    </div>
-
-    <div class="update">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h4>v1.3 — Polished Dashboard</h4>
-        <span class="tag">Stable</span>
-      </div>
-      <p class="muted">Released: 2025-12-08</p>
-      <ul>
-        <li>Major UI overhaul — glass cards, red accent theme, improved responsiveness.</li>
-        <li>Added Discord avatar integration for the owner header.</li>
-        <li>Added user dashboard mock — API key management and recent activity panel.</li>
-      </ul>
-    </div>
-
-  </div>
-
-  <div style="margin-top:12px;" class="muted">
-    <h4>Planned (v1.5)</h4>
-    <ul>
-      <li><strong>Email Verification & Account Protection:</strong> A verified-email workflow to allow encrypted, recoverable script storage.<br> This will include sending verification emails and linking verified emails to an encrypted script vault so scripts can be protected and recovered by the account owner.</li>
-      <li><strong>Encrypted Script Vault:</strong> Scripts stored in the vault will be encrypted server-side with user-linked keys, and only accessible to verified accounts.</li>
-      <li><strong>Optional 2FA:</strong> Offer two-factor authentication for account sign-in and critical actions.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="docs" class="card fade-in" style="margin-top:18px">
-  <h3>API Endpoints</h3>
-  <p class="muted"><strong>POST</strong> https://enchantedhub.onrender.com/v1/obfuscate/auth — Obfuscate code (returns obfuscated code)</p>
-  <p class="muted"><strong>POST</strong> https://enchantedhub.onrender.com/obfuscate-and-store — Store script (returns key)</p>
-  <p class="muted"><strong>GET</strong> https://enchantedhub.onrender.com/v1/api/auth/:key — Retrieve script (Roblox UA required)</p>
-</section>
+<!-- Views container: we'll swap content here -->
+<div id="viewRoot" style="margin-top:18px"></div>
 
   </main>
 </div><script>
 const BASE = 'https://enchantedhub.onrender.com';
-function setConnStatus(text){document.getElementById('status-conn').textContent = text;}
+const viewRoot = document.getElementById('viewRoot');
+const nav = document.getElementById('mainNav');
 
-// API ping
-document.getElementById('check-api') && document.getElementById('check-api').addEventListener('click', async ()=>{
-  try{const res=await fetch(BASE+'/'); setConnStatus(res.ok? 'Online':'Error'); alert('API ping: '+(res.ok? 'OK':res.status));}catch(e){setConnStatus('Offline');alert('API unreachable')}
-});
-
-// Load owner's Discord avatar
-(async function loadDiscordAvatar(){
-  const userId='1256872580514709546';
-  try{
-    const res = await fetch(`https://discord.com/api/users/${userId}`, { headers:{'X-Super-Properties':''}});
-    const json = await res.json();
-    if(json && json.avatar){document.getElementById('ownerAvatar').src = `https://cdn.discordapp.com/avatars/${userId}/${json.avatar}.png?size=512`;}
-    else{document.getElementById('ownerAvatar').src='https://cdn.discordapp.com/embed/avatars/0.png';}
-  }catch(e){document.getElementById('ownerAvatar').src='https://cdn.discordapp.com/embed/avatars/0.png';}
-})();
-
-// helpers & animations
-function setStatus(message,isError=false){
-  const el = document.getElementById('status') || document.createElement('div');
-  el.textContent = message;el.classList && el.classList.add('animate-pulse-once');
+function setActive(view){
+  [...nav.querySelectorAll('button')].forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  renderView(view);
 }
 
-// Obfuscate
-document.getElementById('obfuscate-button') && document.getElementById('obfuscate-button').addEventListener('click', async ()=>{
-  const input = document.getElementById('lua-input').value;
-  const out = document.getElementById('lua-output');
-  const btn = document.getElementById('obfuscate-button');
-  if(!input.trim()){setStatus('Paste code first', true);return}
-  btn.disabled=true; btn.textContent='Processing...'; setStatus('Obfuscating...'); out.value='';
-  try{
-    const res = await fetch(BASE + '/v1/obfuscate/auth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:input})});
-    if(!res.ok){const t=await res.text(); out.value='-- ERROR --
-'+t; setStatus('Obfuscator error', true);}else{const j=await res.json(); out.value=j.obfuscatedCode||''; setStatus('Done');}
-  }catch(e){out.value='-- Network Error --'; setStatus('Network error', true);}finally{btn.disabled=false; btn.textContent='Obfuscate Code';}
-});
+nav.addEventListener('click', e=>{const b=e.target.closest('button'); if(!b) return; setActive(b.dataset.view);});
 
-// copy / download / store
-document.getElementById('btn-copy-out') && document.getElementById('btn-copy-out').addEventListener('click', ()=>{const v=document.getElementById('lua-output').value; if(!v) return alert('Nothing to copy'); navigator.clipboard.writeText(v).then(()=>alert('Copied'))});
-document.getElementById('btn-download') && document.getElementById('btn-download').addEventListener('click', ()=>{const v=document.getElementById('lua-output').value; if(!v) return alert('Nothing to download'); const hex=(Math.random()*0xFFFFFF<<0).toString(16).padStart(6,'0'); const filename=`enchantedhub_obf_${hex}.lua`; const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(v); a.download=filename; a.click();});
+// initial home view
+setActive('home');
 
-// Store script
-document.getElementById('btn-store') && document.getElementById('btn-store').addEventListener('click', async ()=>{
-  let script=document.getElementById('lua-store-source').value.trim(); if(!script) script = document.getElementById('lua-output').value.trim(); if(!script) return alert('No obfuscated script to store');
-  try{const r=await fetch(BASE + '/obfuscate-and-store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({script})}); const j=await r.json(); if(!r.ok) return alert('Store failed: '+(j.error||'unknown')); const key=j.key; const loadURL = `${BASE}/v1/api/auth/${key}`; const loader = `loadstring(game:HttpGet(\"${loadURL}\"))()`; document.getElementById('loader-output').value=loader; navigator.clipboard.writeText(loader); alert('Stored. Loader copied. Key: '+key);}catch(e){alert('Network error storing script')}
-});
+function renderView(view){
+  if(view==='home') return renderHome();
+  if(view==='obfuscate') return renderObfuscator();
+  if(view==='loader') return renderLoader();
+  if(view==='myscripts') return renderMyScripts();
+  if(view==='info') return renderInfo();
+  if(view==='settings') return renderSettings();
+  if(view==='updates') return renderUpdates();
+  viewRoot.innerHTML='';
+}
 
-// Retrieve
-document.getElementById('btn-retrieve') && document.getElementById('btn-retrieve').addEventListener('click', async ()=>{
-  const key = document.getElementById('retrieve-key').value.trim(); if(!key) return alert('Enter key'); try{const r=await fetch(BASE+`/v1/api/auth/${key}`); const t=await r.text(); document.getElementById('retrieve-output').value=t; alert('Retrieved (may be blocked if UA not Roblox)');}catch(e){alert('Network error retrieving')}
-});
+function renderHome(){
+  viewRoot.innerHTML = `
+    <div class="card">
+      <h3>Welcome</h3>
+      <p class="muted">Use the sidebar to access tools: Obfuscator, Script Loader, My Scripts, and more.</p>
+    </div>
+  `;
+}
 
-// user dashboard helpers
-document.getElementById('btn-gen') && document.getElementById('btn-gen').addEventListener('click', ()=>{const key=Math.random().toString(36).substring(2,10).toUpperCase(); document.getElementById('user-apikey').value=key});
-document.getElementById('btn-save-user') && document.getElementById('btn-save-user').addEventListener('click', ()=>{alert('Profile saved locally (demo).')});
+function renderObfuscator(){
+  viewRoot.innerHTML = `
+    <div class="card">
+      <h3>Obfuscator</h3>
+      <p class="muted">Paste Lua code and obfuscate it using the API.</p>
+      <div style="height:12px"></div>
+      <textarea id="obf-input" rows="10" placeholder="Paste Lua code...">-- Simple Example
+local health = 100
+function checkHealth(dmg)
+  health = health - dmg
+  if health <= 0 then
+    print('Player died!')
+  end
+end
 
-// initial ping
-(async ()=>{try{const res=await fetch(BASE+'/'); setConnStatus(res.ok? 'Online':'Error');}catch(e){setConnStatus('Offline')}})();
+checkHealth(50)
+checkHealth(60)</textarea><div style="height:12px"></div>
+  <div style="display:flex;gap:10px"><button class="btn" id="doObf">Obfuscate</button><button class="btn ghost" id="clearObf">Clear</button></div>
+  <div style="height:12px"></div>
+  <textarea id="obf-output" rows="8" readonly class="monos" placeholder="Obfuscated code will appear here..."></textarea>
+</div>
 
-function setConnStatus(s){document.getElementById('status-conn').textContent=s}
-</script></body>
-    </html>
+`; document.getElementById('doObf').addEventListener('click', async ()=>{ const src = document.getElementById('obf-input').value; const out = document.getElementById('obf-output'); out.value=''; try{ const r = await fetch(BASE + '/v1/obfuscate/auth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:src})}); if(!r.ok){out.value='-- Error: '+(await r.text());return} const j = await r.json(); out.value = j.obfuscatedCode || ''; }catch(e){out.value='-- Network error'} }); document.getElementById('clearObf').addEventListener('click', ()=>{document.getElementById('obf-input').value='';document.getElementById('obf-output').value='';}); }
+
+function renderLoader(){ viewRoot.innerHTML = <div class="card"> <h3>Script Loader / Store</h3> <p class="muted">Store obfuscated code and generate loader URLs.</p> <textarea id="store-input" rows="8" placeholder="Paste obfuscated code..."></textarea> <div style="height:12px"></div> <div style="display:flex;gap:10px"><button class="btn" id="doStore">Store Script</button><button class="btn ghost" id="copyLoader">Copy Loader</button></div> <div style="height:12px"></div> <input id="loader-out" class="monos" readonly placeholder="Loader URL will appear here"/> </div>; document.getElementById('doStore').addEventListener('click', async ()=>{ const script = document.getElementById('store-input').value.trim(); if(!script) return alert('Paste obfuscated code'); try{ const r = await fetch(BASE + '/obfuscate-and-store', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({script})}); const j = await r.json(); if(!r.ok) return alert('Store failed: '+(j.error||'unknown')); const key = j.key; const loadURL = ${BASE}/v1/api/auth/${key}; const loader = loadstring(game:HttpGet("${loadURL}"))(); document.getElementById('loader-out').value = loader; navigator.clipboard.writeText(loader); alert('Stored and copied loader.'); }catch(e){alert('Network error storing');} }); document.getElementById('copyLoader').addEventListener('click', ()=>{const v=document.getElementById('loader-out').value; if(!v) return; navigator.clipboard.writeText(v); alert('Copied');}); }
+
+function renderMyScripts(){ viewRoot.innerHTML = <div class="card"> <h3>My Scripts</h3> <p class="muted">Your uploaded scripts will appear here.</p> <div class="scripts-list" id="scriptsList"></div> </div>; // demo placeholder const list = document.getElementById('scriptsList'); const demo = [{id:'abc123',name:'Example Script',time:'2025-12-09'}]; demo.forEach(s=>{ const node = document.createElement('div'); node.className='script-item'; node.innerHTML = <div class="meta"><div class="title">${s.name}</div><div class="sub">${s.time} • ${s.id}</div></div><div class="cta"><button class="btn ghost" data-id="${s.id}">View</button><button class="btn" data-id="${s.id}">Load</button></div>; list.appendChild(node); }); }
+
+function renderInfo(){ viewRoot.innerHTML = <div class="card"><h3>Info</h3><p class="muted">Enchanted Hub handles obfuscation and secure storage for Lua scripts. Use the tools to obfuscate, store, and generate loaders.</p></div>; } function renderSettings(){ viewRoot.innerHTML = <div class="card"><h3>Settings</h3><p class="muted">Account settings, appearance, and integrations (Discord OAuth planned).</p></div>; }
+
+function renderUpdates(){ viewRoot.innerHTML = <div class="card"> <h3>Update Log</h3> <div class="updates-list"> <div class="update"><div style="display:flex;justify-content:space-between;align-items:center"><h4>v1.4 — Security Expansion</h4><span class="tag">Stable</span></div><p class="small-muted">2025-12-10</p><ul><li>Added Update Log tab and improved UI.</li><li>Prepared backend hooks for Email Verification & Encrypted Script Vault (disabled in main UI for now).</li><li>Improved obfuscation UX and loader security.</li></ul><p class="small-muted">Next (v1.5): Email verification + encrypted vault + optional 2FA.</p></div> <div class="update"><div style="display:flex;justify-content:space-between;align-items:center"><h4>v1.3 — Polished Dashboard</h4><span class="tag">Stable</span></div><p class="small-muted">2025-12-08</p><ul><li>Major UI overhaul and Discord avatar integration.</li></ul></div> </div> </div>; }
+
+// initial stats fetch (demo) async function fetchStats(){ try{ // Example: you can implement a proper endpoint to return stats. document.getElementById('stat-auth').textContent='73.8%'; document.getElementById('stat-disputed').textContent='0.08%'; document.getElementById('stat-scripts').textContent='3'; document.getElementById('mini-auth').textContent='73.8%'; document.getElementById('mini-disputed').textContent='0.08%'; document.getElementById('mini-scripts').textContent='3'; }catch(e){console.warn(e)} } fetchStats();
+
+(async ()=>{const id='1256872580514709546';try{const r=await fetch(https://discord.com/api/users/${id},{headers:{'X-Super-Properties':''}});const j=await r.json();if(j&&j.avatar) document.querySelector('#owner .pfp img').src=https://cdn.discordapp.com/avatars/${id}/${j.avatar}.png?size=256;else document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png';}catch(e){document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png'}})();
+
+document.getElementById('mobileMenu').addEventListener('click', ()=>{document.querySelector('.sidebar').classList.toggle('open')});
+
+// show updates by default when clicking updates nav setActive('home'); </script>
+
+</body>
+</html>
