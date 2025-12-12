@@ -160,9 +160,9 @@ function renderUpdates(){ viewRoot.innerHTML = <div class="card"> <h3>Update Log
 
 // initial stats fetch (demo) async function fetchStats(){ try{ // Example: you can implement a proper endpoint to return stats. document.getElementById('stat-auth').textContent='73.8%'; document.getElementById('stat-disputed').textContent='0.08%'; document.getElementById('stat-scripts').textContent='3'; document.getElementById('mini-auth').textContent='73.8%'; document.getElementById('mini-disputed').textContent='0.08%'; document.getElementById('mini-scripts').textContent='3'; }catch(e){console.warn(e)} } fetchStats();
 
-(async ()=>{const id='1256872580514709546';try{const r=await fetch(https://discord.com/api/users/${id},{headers:{'X-Super-Properties':''}});const j=await r.json();if(j&&j.avatar) document.querySelector('#owner .pfp img').src=https://cdn.discordapp.com/avatars/${id}/${j.avatar}.png?size=256;else document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png';}catch(e){document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png'}})();
+// Discord avatar load (owner) (async ()=>{const id='1256872580514709546';try{const r=await fetch(https://discord.com/api/users/${id},{headers:{'X-Super-Properties':''}});const j=await r.json();if(j&&j.avatar) document.querySelector('#owner .pfp img').src=https://cdn.discordapp.com/avatars/${id}/${j.avatar}.png?size=256;else document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png';}catch(e){document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png'}})();
 
-document.getElementById('mobileMenu').addEventListener('click', ()=>{document.querySelector('.sidebar').classList.toggle('open')});
+// Mobile nav toggle document.getElementById('mobileMenu').addEventListener('click', ()=>{document.querySelector('.sidebar').classList.toggle('open')});
 
 // show updates by default when clicking updates nav setActive('home'); </script>
 
