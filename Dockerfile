@@ -10,13 +10,13 @@ WORKDIR /usr/src/app
 
 # 3. Copy package.json and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --production
 
-# 4. Copy the rest of the code
+# 4. Copy the rest of your project files
 COPY . .
 
 # 5. Expose your API port
 EXPOSE 10000
 
-# 6. Start both server and bot
-CMD ["npx", "concurrently", "npm:start", "npm:bot"]
+# 6. Start ONLY server.js
+CMD ["node", "server.js"]
