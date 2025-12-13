@@ -1,5 +1,5 @@
 // =======================================================
-// Enchanted Hub Backend (Updated for Discord Avatar)
+// Enchanted Hub Backend (server.js)
 // =======================================================
 
 const express = require("express");
@@ -10,6 +10,7 @@ const cors = require("cors");
 const { exec } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+// Ensure you have node-fetch installed: npm install node-fetch@2
 const fetch = require("node-fetch"); 
 const session = require('express-session'); 
 
@@ -29,6 +30,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
+        // IMPORTANT: Must be 'none' and 'secure: true' for cross-origin requests (like Render)
         secure: true, 
         httpOnly: true,
         sameSite: 'none', 
@@ -36,15 +38,16 @@ app.use(session({
     } 
 }));
 
-// CORS setup: Allow credentials and specific origin
+// CORS setup: Allow credentials and specific origin (Replace with your actual Render URL)
 app.use(cors({
-    origin: 'https://enchantedhub.onrender.com', // Replace with your frontend URL
+    origin: 'https://enchantedhub.onrender.com', 
     credentials: true,
 }));
 
 // --------------------- PostgreSQL (Render Compatible) ---------------------
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    // Required for Render/external databases
     ssl: { rejectUnauthorized: false } 
 });
 
@@ -56,7 +59,7 @@ pool.connect((err, client, done) => {
 
     console.log("Connected to PostgreSQL (Enchanted Hub).");
 
-    // UPDATED: Added avatar column to the users table
+    // DB Schema Setup (Including the new 'avatar' column)
     const tableSQL = `
         CREATE TABLE IF NOT EXISTS scripts (
             key VARCHAR(64) PRIMARY KEY,
@@ -64,7 +67,6 @@ pool.connect((err, client, done) => {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
         
-        -- UPDATED: Added avatar column
         CREATE TABLE IF NOT EXISTS users (
             discord_id VARCHAR(32) PRIMARY KEY,
             username VARCHAR(255) NOT NULL,
@@ -96,10 +98,17 @@ pool.connect((err, client, done) => {
 });
 
 // --------------------- Static Folder & Constants ---------------------
+// IMPORTANT: Assumes your frontend index.html is in a 'public' folder
 app.use(express.static("public"));
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Assuming API-SERVICE.html is also a static file you want served
 app.get("/API-SERVICE.html", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "API-SERVICE.html"));
 });
+
 
 const WATERMARK = "--[[\n\n </> Enchanted Hub Lua Obfuscator\n\n--[[";
 const FALLBACK_WATERMARK = "--[[ OBFUSCATION FAILED: Returning raw Lua. Check your syntax. ]] ";
@@ -112,9 +121,10 @@ const applyFallback = (raw) => `${FALLBACK_WATERMARK}\n${raw}`;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
-const DISCORD_SCOPES = 'identify email guilds.join'; 
+// Required scopes for user info and avatar/email
+const DISCORD_SCOPES = 'identify email'; 
 
-// Guild Join Configuration
+// Guild Join Configuration (Only runs if TOKEN is provided in .env)
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN; 
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;   
 
@@ -128,9 +138,10 @@ const requireAuth = (req, res, next) => {
 };
 
 // --------------------- Discord Guild Join Function ---------------------
+// This function will be skipped if the .env variables are empty.
 const addUserToGuild = async (userId, accessToken, username) => {
-    if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
-        console.warn("DISCORD_BOT_TOKEN or DISCORD_GUILD_ID is missing. Skipping guild join.");
+    if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID || DISCORD_BOT_TOKEN.trim() === "") {
+        console.log("Skipping guild join: Bot token is missing or empty.");
         return { success: false, message: "Missing server configuration." };
     }
 
@@ -150,12 +161,12 @@ const addUserToGuild = async (userId, accessToken, username) => {
         });
 
         if (response.status === 201 || response.status === 204) {
-            console.log(`User ${userId} successfully added/already in guild ${DISCORD_GUILD_ID}.`);
+            console.log(`User ${userId} successfully added/already in guild.`);
             return { success: true };
         } 
         
         const errorData = await response.json();
-        console.error(`Failed to add user ${userId} to guild ${DISCORD_GUILD_ID}:`, errorData);
+        console.error(`Failed to add user ${userId} to guild:`, errorData);
         return { success: false, message: errorData.message || "Discord API error during guild join." };
 
     } catch (err) {
@@ -165,7 +176,7 @@ const addUserToGuild = async (userId, accessToken, username) => {
 };
 
 // =======================================================
-// ======  DISCORD OAUTH2 FLOW (UPDATED) ===================
+// ======  DISCORD OAUTH2 FLOW (CORE AUTH) =================
 // =======================================================
 
 // 1. Redirect to Discord
@@ -174,7 +185,7 @@ app.get('/auth/discord', (req, res) => {
     res.redirect(discordAuthUrl);
 });
 
-// 2. Discord Callback (Receives the code)
+// 2. Discord Callback (Receives the code) - Fetches Avatar/User data
 app.get('/auth/discord/callback', async (req, res) => {
     const code = req.query.code;
     if (!code) {
@@ -208,7 +219,7 @@ app.get('/auth/discord/callback', async (req, res) => {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         const userData = await userResponse.json();
-        // NOW FETCHING AVATAR HASH
+        // Extract required data, including the avatar hash
         const { id, username, email, avatar } = userData; 
 
         // 1. Store or update user in database (including email and avatar)
@@ -217,13 +228,13 @@ app.get('/auth/discord/callback', async (req, res) => {
             [id, username, email, avatar]
         );
         
-        // 2. Attempt to add user to the guild (Server)
+        // 2. Attempt to add user to the guild (runs only if bot token is present)
         await addUserToGuild(id, accessToken, username);
 
-        // 3. Set session (NOW INCLUDING AVATAR)
+        // 3. Set session (Including avatar hash)
         req.session.discord_id = id;
         req.session.username = username;
-        req.session.avatar = avatar; // Store avatar hash in session
+        req.session.avatar = avatar; 
 
         // Redirect back to the main dashboard/frontend
         res.redirect('/'); 
@@ -234,10 +245,10 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 });
 
-// 3. Get User Status (for Frontend) - UPDATED
+// 3. Get User Status (for Frontend) - Returns Avatar/Username
 app.get('/api/user/status', async (req, res) => {
     if (req.session.discord_id) {
-        // Fetch the latest avatar and username from the DB, just in case the session is stale
+        // Fetch the latest avatar and username from the DB 
         try {
             const result = await pool.query(
                 "SELECT username, avatar FROM users WHERE discord_id = $1",
@@ -261,14 +272,14 @@ app.get('/api/user/status', async (req, res) => {
                 loggedIn: true, 
                 discord_id: req.session.discord_id,
                 username: req.session.username,
-                avatar: req.session.avatar // Fallback avatar hash
+                avatar: req.session.avatar 
             });
             return;
         }
 
     } 
     
-    // Not logged in or DB lookup failed
+    // Not logged in 
     res.json({ loggedIn: false });
 });
 
@@ -282,12 +293,10 @@ app.post('/api/user/logout', (req, res) => {
 });
 
 // =======================================================
-// === OBFUSCATION, STORAGE, MANAGEMENT ENDPOINTS (No Change) ===
+// === OBFUSCATION, STORAGE, MANAGEMENT ENDPOINTS ========
 // =======================================================
 
-// ... (Rest of the /v1/obfuscate/auth, /obfuscate-and-store, /api/user/scripts, etc. endpoints remain the same) ...
-
-// Existing logic for obfuscating without storing (no auth required)
+// Obfuscate (No Storage/Auth)
 app.post("/v1/obfuscate/auth", async (req, res) => {
     const rawLua = req.body.code;
     const preset = "Medium";
@@ -299,6 +308,7 @@ app.post("/v1/obfuscate/auth", async (req, res) => {
     let obfuscated = "";
     let success = false;
 
+    // ... (Obfuscation execution logic remains the same) ...
     try {
         fs.writeFileSync(tempFile, rawLua, "utf8");
 
@@ -340,7 +350,7 @@ app.post("/v1/obfuscate/auth", async (req, res) => {
     res.json({ obfuscatedCode: obfuscated, success });
 });
 
-// /obfuscate-and-store endpoint
+// Obfuscate and Store (Requires Auth)
 app.post("/obfuscate-and-store", requireAuth, async (req, res) => {
     const rawLua = req.body.script;
     const user_discord_id = req.session.discord_id;
@@ -390,31 +400,29 @@ app.post("/obfuscate-and-store", requireAuth, async (req, res) => {
     const key = generateUniqueId();
 
     try {
-        await pool.query("BEGIN"); // Start transaction
+        await pool.query("BEGIN"); 
 
-        // 1. Insert into scripts table
         await pool.query(
             "INSERT INTO scripts(key, script) VALUES($1, $2)",
             [key, obfuscated]
         );
         
-        // 2. Link script to user
         await pool.query(
             "INSERT INTO script_users(script_key, user_discord_id) VALUES($1, $2)",
             [key, user_discord_id]
         );
 
-        await pool.query("COMMIT"); // Commit transaction
+        await pool.query("COMMIT"); 
 
         res.status(201).json({ key, success });
     } catch (err) {
-        await pool.query("ROLLBACK"); // Rollback on error
+        await pool.query("ROLLBACK"); 
         console.error("DB Store Error:", err);
         res.status(500).json({ error: "Storage Failure" });
     }
 });
 
-// /api/user/scripts endpoint
+// Get User Scripts (Requires Auth)
 app.get("/api/user/scripts", requireAuth, async (req, res) => {
     const user_discord_id = req.session.discord_id;
 
@@ -445,12 +453,13 @@ app.get("/api/user/scripts", requireAuth, async (req, res) => {
     }
 });
 
-// DELETE SCRIPT
+// DELETE SCRIPT (Requires Auth)
 app.delete("/api/user/scripts/:key", requireAuth, async (req, res) => {
     const key = req.params.key;
     const user_discord_id = req.session.discord_id;
 
     try {
+        // Deleting from the join table handles ownership check
         const deleteResult = await pool.query(
             "DELETE FROM script_users WHERE script_key = $1 AND user_discord_id = $2 RETURNING script_key",
             [key, user_discord_id]
@@ -467,13 +476,12 @@ app.delete("/api/user/scripts/:key", requireAuth, async (req, res) => {
     }
 });
 
-// EDIT SCRIPT
+// EDIT SCRIPT (Requires Auth)
 app.put("/api/user/scripts/:key", requireAuth, async (req, res) => {
     const key = req.params.key;
     const rawLua = req.body.script;
     const user_discord_id = req.session.discord_id;
 
-    // First, verify the user owns the script
     const ownershipCheck = await pool.query(
         "SELECT 1 FROM script_users WHERE script_key = $1 AND user_discord_id = $2",
         [key, user_discord_id]
@@ -544,7 +552,7 @@ app.put("/api/user/scripts/:key", requireAuth, async (req, res) => {
 });
 
 
-// /v1/api/auth/:key endpoint
+// /v1/api/auth/:key endpoint (Script Retrieval)
 app.get("/v1/api/auth/:key", async (req, res) => {
     const key = req.params.key;
     const ua = req.headers["user-agent"];
@@ -585,11 +593,6 @@ app.get("/v1/api/auth/:key", async (req, res) => {
     }
 });
 
-
-// Root
-app.get("/", (req, res) => {
-    res.send("Enchanted Hub Backend Running.");
-});
 
 // Start Server
 app.listen(port, () => {
