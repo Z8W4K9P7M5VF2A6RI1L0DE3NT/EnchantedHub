@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     
     <style>
-        /* Custom Properties (Variables) */
+        /* ... (CSS styles remain the same for functionality) ... */
         :root {
             /* Dashboard Theme */
             --color-sidebar-bg: #1c1a25; 
@@ -83,7 +83,7 @@
             align-items: center;
             font-weight: 700;
             font-size: 1.2em;
-            overflow: hidden; /* Ensure image fits */
+            overflow: hidden; 
         }
         
         .user-avatar img {
@@ -587,7 +587,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- Configuration ---
-            const BASE_URL = 'https://enchantedhub.onrender.com/'; // CHANGE THIS TO YOUR RENDER DOMAIN
+            // !!! IMPORTANT !!! CHANGE THIS TO YOUR LIVE RENDER DOMAIN
+            const BASE_URL = 'https://enchantedhub.onrender.com'; 
+            
             const DISCORD_LOGIN_URL = `${BASE_URL}/auth/discord`;
             const DISCORD_CDN_BASE = 'https://cdn.discordapp.com/avatars';
 
@@ -643,9 +645,7 @@
              */
             const getDiscordAvatarURL = (userId, avatarHash) => {
                 if (!avatarHash) {
-                    // Fallback to the default Discord avatar (based on discriminator)
-                    // Discord uses default avatars based on (user ID >> 22) % 6 since 2022
-                    // For simplicity, we'll return a generic profile icon or a static fallback
+                    // Fallback to the default Discord avatar (default is always a hash of '0' for a placeholder)
                     return 'https://cdn.discordapp.com/embed/avatars/0.png'; 
                 }
                 // Discord avatar format: /avatars/user_id/avatar_hash.png?size=128
@@ -707,6 +707,7 @@
                     img.src = avatarUrl;
                     img.alt = `${username}'s Avatar`;
                     userAvatar.appendChild(img);
+                    userAvatar.style.backgroundColor = 'transparent'; // Remove generic background
 
                     welcomeMessage.textContent = 'Logged in via Discord';
                     loginStatus.textContent = `Signed in as ${username}`;
@@ -717,7 +718,7 @@
                     
                 } else {
                     userAvatar.textContent = 'NH';
-                    userAvatar.style.backgroundColor = 'var(--color-brand-red)'; // Reset background
+                    userAvatar.style.backgroundColor = 'var(--color-brand-red)'; 
                     welcomeMessage.textContent = 'Welcome back';
                     loginStatus.textContent = 'Not signed in';
                     loginStatus.style.color = 'var(--color-error)';
@@ -736,6 +737,7 @@
 
             const checkAuthStatus = async () => {
                 try {
+                    // Use credentials: 'include' to send session cookie
                     const response = await fetch(`${BASE_URL}/api/user/status`, {credentials: 'include'});
                     const data = await response.json();
 
@@ -774,8 +776,7 @@
                 }
             };
 
-            // --- Obfuscation & Scripts Logic (Logic remains similar to previous step, 
-            // ensuring credentials: 'include' for all authenticated calls) ---
+            // --- Obfuscation & Scripts Logic ---
 
             const handleObfuscateOnly = async () => {
                 const rawCode = luaInput.value.trim();
