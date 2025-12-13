@@ -1,170 +1,1067 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Enchanted Hub — Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#0b0d0f;
-    --sidebar:#0f1113;
-    --card:#121416;
-    --muted:#98a0a6;
-    --accent:#7c5cff; /* purple accent like example */
-    --accent-2:#6b3bff;
-    --glass: rgba(255,255,255,0.03);
-    --radius:12px;
-    --container-max:1200px;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#e6eef6;background:var(--bg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.app{display:flex;min-height:100vh} /* SIDEBAR */ .sidebar{width:220px;background:linear-gradient(180deg,var(--sidebar),#0b0c0e);padding:18px;border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:18px} .brand{display:flex;gap:12px;align-items:center} .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff} .brand h1{font-size:16px;margin:0} .brand p{margin:0;color:var(--muted);font-size:12px} .nav{display:flex;flex-direction:column;gap:6px;margin-top:8px} .nav button{background:transparent;border:none;color:#cfe3ff;padding:10px;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px} .nav button.active{background:linear-gradient(90deg, rgba(124,92,255,0.12), rgba(107,59,255,0.04));transform:translateX(4px)} .small-muted{font-size:12px;color:var(--muted)}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iblameaabis | Enchanted Hub Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Custom Properties (Variables) */
+        :root {
+            /* Dashboard Theme */
+            --color-sidebar-bg: #1c1a25; 
+            --color-main-bg: #16151c;
+            --color-card-bg: #211f2c;
+            --color-primary-accent: #8a2be2; /* Purple/Violet */
+            --color-secondary-accent: #00bcd4; /* Cyan */
+            
+            /* Profile/Brand Theme */
+            --color-brand-red: #ff3333; 
 
-.signin{margin-top:auto} .signin button{width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white;font-weight:700;cursor:pointer}
+            --color-text-main: #e0e0e0;
+            --color-text-light: #a0a0a0;
+            --color-success: #4CAF50;
+            --color-error: #f44336;
+            --color-warning: #ffc107;
+            --font-main: 'Inter', sans-serif;
+            --font-code: 'Roboto Mono', monospace;
+            --border-radius: 8px;
+            --padding-unit: 16px;
+        }
 
-/* MAIN */ .main{flex:1;padding:20px;max-width:calc(100% - 220px)} .header{display:flex;justify-content:space-between;align-items:center;gap:12px} .page-title{font-size:20px;font-weight:800} .search{width:280px;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:#e6eef6}
+        /* Global Reset & Base Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-.grid{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px} .card{background:linear-gradient(180deg,var(--card),rgba(10,10,12,0.6));padding:18px;border-radius:12px;border:1px solid var(--glass);box-shadow:0 10px 30px rgba(0,0,0,0.6)} .card h3{margin:0 0 10px 0} .stats{display:flex;gap:12px} .stat{flex:1;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px} .stat h4{margin:0;font-size:14px;color:var(--muted)} .stat p{margin:6px 0 0 0;font-weight:800;font-size:18px}
+        body {
+            font-family: var(--font-main);
+            background-color: var(--color-main-bg);
+            color: var(--color-text-main);
+            min-height: 100vh;
+            display: flex;
+        }
 
-/* scripts list */ .scripts-list{display:flex;flex-direction:column;gap:8px} .script-item{padding:10px;border-radius:8px;background:rgba(0,0,0,0.25);display:flex;justify-content:space-between;align-items:center} .script-item .meta{display:flex;flex-direction:column} .script-item .meta .title{font-weight:700} .script-item .meta .sub{font-size:12px;color:var(--muted)} .cta{display:inline-flex;gap:8px} .btn{padding:8px 12px;border-radius:8px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer} .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+        /* --- 1. Layout Container (Two-Column) --- */
+        .app-container {
+            display: flex;
+            width: 100%;
+        }
 
-/* responsive */ @media (max-width:900px){.sidebar{display:none}.main{padding:12px}.grid{grid-template-columns:1fr}} </style>
+        /* --- 2. Sidebar (Navigation) --- */
+        .sidebar {
+            width: 250px;
+            background-color: var(--color-sidebar-bg);
+            padding: 20px 0;
+            height: 100vh;
+            position: fixed;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+        }
 
+        .user-profile {
+            padding: 0 var(--padding-unit);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* Updated Avatar Style */
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background-color: var(--color-brand-red); 
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.2em;
+            overflow: hidden; /* Ensure image fits */
+        }
+        
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .user-info p {
+            font-size: 0.85em;
+            color: var(--color-text-light);
+        }
+
+        .navigation a {
+            display: flex;
+            align-items: center;
+            padding: 12px var(--padding-unit);
+            color: var(--color-text-main);
+            text-decoration: none;
+            font-size: 1em;
+            transition: background-color 0.2s, color 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .navigation a:hover {
+            background-color: #2e2a3b;
+        }
+
+        .navigation a.active {
+            background-color: #353043;
+            color: var(--color-primary-accent);
+            border-left: 3px solid var(--color-primary-accent);
+        }
+        
+        .navigation i {
+            margin-right: 10px;
+        }
+
+        .discord-box {
+            margin-top: auto; 
+            padding: var(--padding-unit);
+            background-color: #16151c;
+            border-radius: var(--border-radius);
+            margin: 0 var(--padding-unit) 20px;
+            text-align: center;
+        }
+        
+        .discord-box p {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            color: var(--color-text-light);
+        }
+
+        .discord-btn {
+            width: 100%;
+            padding: 8px;
+            background-color: #5865F2; 
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        
+        .discord-btn.logout {
+            background-color: var(--color-error);
+            margin-top: 10px;
+        }
+        
+        .btn.primary {
+            background-color: var(--color-primary-accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        .btn.secondary {
+            background-color: var(--color-secondary-accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn.small {
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+
+
+        /* --- 3. Main Content --- */
+        .content {
+            margin-left: 250px; 
+            padding: 30px;
+            width: calc(100% - 250px);
+        }
+
+        .content h1 {
+            color: var(--color-text-main);
+            margin-bottom: 25px;
+            font-size: 1.8em;
+            font-weight: 700;
+        }
+        
+        /* Dashboard Stats Grid */
+        .quick-stats-grid {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background-color: var(--color-card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+        }
+        
+        .stat-card h3 {
+            font-size: 0.9em;
+            color: var(--color-text-light);
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            font-size: 1.6em;
+            font-weight: 800;
+            color: var(--color-primary-accent);
+        }
+
+        /* --- Tab Content --- */
+        .tab-content {
+            display: none;
+            background-color: var(--color-card-bg);
+            padding: 40px;
+            border-radius: var(--border-radius);
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Profile/Home Tab Styles (Red Accent) */
+        .profile-card {
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.2); 
+        }
+        
+        .profile-card h2 {
+            font-size: 3em;
+            font-weight: 800;
+            color: var(--color-brand-red);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .profile-card p.subtitle {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: var(--color-text-light);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .profile-card hr {
+            border: 0;
+            height: 1px;
+            background-image: linear-gradient(to right, rgba(255, 51, 51, 0), rgba(255, 51, 51, 0.75), rgba(255, 51, 51, 0));
+            margin-bottom: 30px;
+        }
+
+        .profile-card h3 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        
+        .profile-card h3 span {
+            color: var(--color-brand-red);
+        }
+
+        .about-text {
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .services-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .service-card {
+            flex: 1 1 250px;
+            background-color: #1a1a1a;
+            padding: 25px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            border-top: 3px solid var(--color-brand-red);
+        }
+        
+        /* Obfuscator Tool Tab Styles */
+        .obfuscator-tool h3 {
+            border-left: 4px solid var(--color-primary-accent);
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--color-text-light);
+            font-size: 0.9em;
+        }
+
+        textarea {
+            width: 100%;
+            height: 250px;
+            padding: var(--padding-unit);
+            border-radius: 4px;
+            border: 1px solid #3a3a3a;
+            background-color: #1a1a1a;
+            color: var(--color-text-main);
+            font-family: var(--font-code);
+            font-size: 0.9em;
+            resize: vertical;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .code-output {
+            background-color: #1a1a1a;
+            padding: var(--padding-unit);
+            border-radius: 4px;
+            border: 1px solid #3a3a3a;
+            min-height: 150px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: var(--font-code);
+            font-size: 0.9em;
+            color: var(--color-secondary-accent);
+            margin-top: 10px;
+        }
+
+        .output-actions {
+            margin-top: 15px;
+        }
+        
+        .note-box {
+            padding: 15px;
+            border-radius: var(--border-radius);
+            background-color: #353043;
+            border-left: 5px solid var(--color-primary-accent);
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        /* --- My Scripts Tab Styles (New) --- */
+        .script-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        .script-table th, .script-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        .script-table th {
+            color: var(--color-text-light);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .script-table td {
+            color: var(--color-text-main);
+        }
+        
+        .suspicious-flag {
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 0.75em;
+        }
+        .flag-low {
+            background-color: var(--color-success);
+            color: var(--color-sidebar-bg);
+        }
+        .flag-high {
+            background-color: var(--color-error);
+            color: white;
+        }
+        .flag-medium {
+            background-color: var(--color-warning);
+            color: var(--color-sidebar-bg);
+        }
+
+        /* --- Modal Styles (New) --- */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 100; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.6); 
+        }
+
+        .modal-content {
+            background-color: var(--color-card-bg);
+            margin: 10% auto; 
+            padding: 30px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close-btn:hover,
+        .close-btn:focus {
+            color: var(--color-brand-red);
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-<div class="app">
-  <aside class="sidebar" aria-label="Sidebar">
-    <div class="brand"><div class="logo">EH</div><div><h1>Enchanted Hub</h1><p class="small-muted">Dashboard</p></div></div><nav class="nav" id="mainNav">
-  <button class="active" data-view="home">🏠 Home</button>
-  <button data-view="obfuscate">🛠️ Obfuscator</button>
-  <button data-view="loader">📦 Script Loader</button>
-  <button data-view="myscripts">📜 My Scripts</button>
-  <button data-view="info">ℹ️ Info</button>
-  <button data-view="settings">⚙️ Settings</button>
-  <button data-view="updates">📝 Update Log</button>
-</nav>
+    <div class="app-container">
+        
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="user-avatar" id="user-avatar">NH</div>
+                <div class="user-info">
+                    <strong id="username-display">User Name</strong>
+                    <p id="welcome-message">Welcome back</p>
+                </div>
+            </div>
 
-<div class="signin"><button id="discordSign">Sign in with Discord</button></div>
-<div class="small-muted" style="margin-top:10px">Signed in: <span id="signedInUser">Not signed in</span></div>
+            <nav class="navigation" id="main-nav">
+                <a href="#dashboard" class="nav-link active" data-target="dashboard">
+                    <i style="font-style: normal;">&#8962;</i> Home
+                </a>
+                <a href="#obfuscator" class="nav-link" data-target="obfuscator">
+                    <i style="font-style: normal;">&#128083;</i> Obfuscator
+                </a>
+                <a href="#my-scripts" class="nav-link" data-target="scripts">
+                    <i style="font-style: normal;">&#128193;</i> My Scripts
+                </a>
+                <a href="#settings" class="nav-link" data-target="settings">
+                    <i style="font-style: normal;">&#9881;</i> Settings
+                </a>
+            </nav>
 
-  </aside>  <main class="main">
-    <div class="header">
-      <div>
-        <div class="page-title">Dashboard</div>
-        <div class="small-muted">Welcome to Enchanted Hub</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input class="search" placeholder="Search..." id="searchInput">
-        <button class="btn ghost" id="mobileMenu">☰</button>
-      </div>
-    </div><div class="grid">
-  <section class="card">
-    <h3>Last Data</h3>
-    <div style="height:14px"></div>
-    <div class="stats">
-      <div class="stat"><h4>Authenticated</h4><p id="stat-auth">—</p></div>
-      <div class="stat"><h4>Disputed</h4><p id="stat-disputed">—</p></div>
-      <div class="stat"><h4>Scripts</h4><p id="stat-scripts">—</p></div>
+            <div class="discord-box">
+                <p>Discord Presence</p>
+                <button class="discord-btn" id="login-btn">Sign in with Discord</button>
+                <button class="discord-btn logout" id="logout-btn" style="display:none;">Log Out</button>
+                <p id="login-status" style="font-size: 0.75em; margin-top: 5px; color: var(--color-error);">Not signed in</p>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="main-content-title">Dashboard</h1>
+
+            <div class="quick-stats-grid">
+                <div class="stat-card">
+                    <h3>Authenticated</h3>
+                    <p>73.8%</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Disputed</h3>
+                    <p>0.081%</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Scripts</h3>
+                    <p id="script-count">0</p>
+                </div>
+            </div>
+            
+            <div id="tab-content-container">
+                
+                <div id="dashboard" class="tab-content active">
+                    <div class="profile-card">
+                        <h2>iblameaabis</h2>
+                        <p class="subtitle">Frontend || Backend Developer & UI/UX Designer</p>
+                        <hr>
+                        <h3>About <span>Me</span></h3>
+                        <p class="about-text">
+                            I make websites and scripts that work good. I know Lua, Lua(U), Python, JavaScript, TypeScript, HTML, CSS, C++, C#, C, Bash, Java, and other coding stuff. I build things that look nice and work fast. I play games like Roblox and PUBG which helps me understand what people want. Looking for cool projects to work on.
+                        </p>
+                        <h3>My <span>Services</span></h3>
+                        <div class="services-container">
+                            <div class="service-card">
+                                <div class="icon" style="font-size: 2em; margin-bottom: 10px;">&lt;&gt;</div>
+                                <h4>Script Development</h4>
+                                <p style="color: var(--color-text-light);">Making Lua scripts that work properly</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="obfuscator" class="tab-content">
+                    <div class="obfuscator-tool">
+                        <h3>🔮 Lua Obfuscation Service</h3>
+                        <div class="input-group">
+                            <label for="lua-input">Raw Lua Code</label>
+                            <textarea id="lua-input" placeholder="Paste your Lua code here..."></textarea>
+                        </div>
+
+                        <div class="button-group">
+                            <button id="obfuscate-only-btn" class="btn primary">Obfuscate Only (Download)</button>
+                            <button id="obfuscate-store-btn" class="btn secondary" disabled>Obfuscate & Store (Get Key)</button>
+                        </div>
+
+                        <hr style="background-color: #3a3a3a; border: none; height: 1px; margin: 30px 0;">
+
+                        <div class="output-container">
+                            <h3 style="border:none; padding-left:0;"><span id="output-title">Results</span></h3>
+                            <pre id="output-code" class="code-output">Awaiting submission...</pre>
+                            <div class="output-actions">
+                                <button id="copy-btn" class="btn small primary" disabled>Copy to Clipboard</button>
+                                <button id="download-btn" class="btn small secondary" disabled>Download File</button>
+                            </div>
+                        </div>
+                        
+                        <div class="note-box" id="key-note" style="display: none;">
+                            <p>🔑 **Your Access Key:** Use this key in your Roblox environment to securely load the script.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="scripts" class="tab-content">
+                    <h3>My Stored Scripts</h3>
+                    <p id="scripts-info">Login to Discord to view and manage your obfuscated scripts.</p>
+                    <table class="script-table" id="my-scripts-table" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Created</th>
+                                <th>Activity</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scripts-table-body">
+                            </tbody>
+                    </table>
+                </div>
+
+                <div id="settings" class="tab-content">
+                    <h3>User Settings</h3>
+                    <div class="stat-card" style="background-color: #1a1a1a;">
+                        <p style="color: var(--color-text-light);">Options for API key management, theme, etc. will be here.</p>
+                    </div>
+                </div>
+
+            </div> </main>
+    </div>
+    
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3 style="color: var(--color-primary-accent);">Edit and Re-Obfuscate Script</h3>
+            <p style="margin-bottom: 15px; font-size: 0.9em;">**Key:** <span id="modal-script-key" style="color:var(--color-secondary-accent); font-weight:700;"></span></p>
+            <div class="input-group">
+                <label for="edit-lua-input">Raw Lua Code (Paste updated, clean code below)</label>
+                <textarea id="edit-lua-input" rows="15" placeholder="Paste your updated Lua code here. The original obfuscated code is NOT editable here."></textarea>
+            </div>
+            <button id="save-edit-btn" class="btn primary">Save & Re-Obfuscate</button>
+        </div>
     </div>
 
-    <div style="height:16px"></div>
-    <h4 style="margin:0 0 8px 0">Quick Actions</h4>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" id="goObf">Obfuscate Code</button>
-      <button class="btn ghost" id="goStore">Store Script</button>
-    </div>
-  </section>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Configuration ---
+            const BASE_URL = 'https://enchantedhub.onrender.com/'; // CHANGE THIS TO YOUR RENDER DOMAIN
+            const DISCORD_LOGIN_URL = `${BASE_URL}/auth/discord`;
+            const DISCORD_CDN_BASE = 'https://cdn.discordapp.com/avatars';
 
-  <aside class="card">
-    <h3>Quick stats</h3>
-    <div style="height:10px"></div>
-    <div class="muted">Overview</div>
-    <div style="height:12px"></div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;justify-content:space-between"><div class="small-muted">Authenticated</div><div id="mini-auth">—</div></div>
-      <div style="display:flex;justify-content:space-between"><div class="small-muted">Disputed</div><div id="mini-disputed">—</div></div>
-      <div style="display:flex;justify-content:space-between"><div class="small-muted">Scripts</div><div id="mini-scripts">—</div></div>
-    </div>
-  </aside>
-</div>
+            // --- Global State ---
+            let isAuthenticated = false;
+            let currentUsername = 'User Name';
 
-<!-- Views container: we'll swap content here -->
-<div id="viewRoot" style="margin-top:18px"></div>
+            // --- DOM Elements ---
+            const navLinks = document.querySelectorAll('.nav-link');
+            const contentSections = document.querySelectorAll('.tab-content');
+            const mainTitle = document.getElementById('main-content-title');
+            const statsGrid = document.querySelector('.quick-stats-grid');
+            
+            // Auth elements
+            const userAvatar = document.getElementById('user-avatar');
+            const usernameDisplay = document.getElementById('username-display');
+            const welcomeMessage = document.getElementById('welcome-message');
+            const loginBtn = document.getElementById('login-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+            const loginStatus = document.getElementById('login-status');
 
-  </main>
-</div><script>
-const BASE = 'https://enchantedhub.onrender.com';
-const viewRoot = document.getElementById('viewRoot');
-const nav = document.getElementById('mainNav');
+            // Obfuscator Tool elements
+            const luaInput = document.getElementById('lua-input');
+            const obfuscateOnlyBtn = document.getElementById('obfuscate-only-btn');
+            const obfuscateStoreBtn = document.getElementById('obfuscate-store-btn');
+            const outputTitle = document.getElementById('output-title');
+            const outputCode = document.getElementById('output-code');
+            const copyBtn = document.getElementById('copy-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const keyNote = document.getElementById('key-note');
+            
+            // Scripts elements
+            const scriptCountDisplay = document.getElementById('script-count');
+            const scriptsInfo = document.getElementById('scripts-info');
+            const scriptsTable = document.getElementById('my-scripts-table');
+            const scriptsTableBody = document.getElementById('scripts-table-body');
+            
+            // Modal elements
+            const editModal = document.getElementById('editModal');
+            const closeModal = document.querySelector('.close-btn');
+            const modalScriptKey = document.getElementById('modal-script-key');
+            const editLuaInput = document.getElementById('edit-lua-input');
+            const saveEditBtn = document.getElementById('save-edit-btn');
 
-function setActive(view){
-  [...nav.querySelectorAll('button')].forEach(b=>b.classList.toggle('active', b.dataset.view===view));
-  renderView(view);
-}
 
-nav.addEventListener('click', e=>{const b=e.target.closest('button'); if(!b) return; setActive(b.dataset.view);});
+            // --- Utility Functions ---
 
-// initial home view
-setActive('home');
+            /**
+             * Constructs the Discord CDN URL for the user's avatar.
+             * @param {string} userId - The user's Discord ID.
+             * @param {string} avatarHash - The user's avatar hash.
+             * @returns {string} The URL to the avatar image.
+             */
+            const getDiscordAvatarURL = (userId, avatarHash) => {
+                if (!avatarHash) {
+                    // Fallback to the default Discord avatar (based on discriminator)
+                    // Discord uses default avatars based on (user ID >> 22) % 6 since 2022
+                    // For simplicity, we'll return a generic profile icon or a static fallback
+                    return 'https://cdn.discordapp.com/embed/avatars/0.png'; 
+                }
+                // Discord avatar format: /avatars/user_id/avatar_hash.png?size=128
+                return `${DISCORD_CDN_BASE}/${userId}/${avatarHash}.png?size=128`;
+            };
 
-function renderView(view){
-  if(view==='home') return renderHome();
-  if(view==='obfuscate') return renderObfuscator();
-  if(view==='loader') return renderLoader();
-  if(view==='myscripts') return renderMyScripts();
-  if(view==='info') return renderInfo();
-  if(view==='settings') return renderSettings();
-  if(view==='updates') return renderUpdates();
-  viewRoot.innerHTML='';
-}
+            // Navigation & Tab Switching
+            const switchTab = (targetId) => {
+                navLinks.forEach(link => link.classList.remove('active'));
+                contentSections.forEach(section => section.classList.remove('active'));
 
-function renderHome(){
-  viewRoot.innerHTML = `
-    <div class="card">
-      <h3>Welcome</h3>
-      <p class="muted">Use the sidebar to access tools: Obfuscator, Script Loader, My Scripts, and more.</p>
-    </div>
-  `;
-}
+                const activeLink = document.querySelector(`[data-target="${targetId}"]`);
+                const activeContent = document.getElementById(targetId);
+                
+                if (activeLink) activeLink.classList.add('active');
+                if (activeContent) activeContent.classList.add('active');
+                
+                mainTitle.textContent = targetId.charAt(0).toUpperCase() + targetId.slice(1);
+                statsGrid.style.display = (targetId === 'dashboard') ? 'flex' : 'none';
+                
+                if (targetId === 'scripts' && isAuthenticated) {
+                    fetchUserScripts(); 
+                }
+            };
+            
+            // Obfuscator Output Display
+            const displayOutput = (title, content, enableDownload = false) => {
+                outputTitle.textContent = title;
+                outputCode.textContent = content;
+                keyNote.style.display = 'none';
+                
+                const isContentValid = content.trim() !== '' && !content.includes("Awaiting submission...") && !content.includes("OBFUSCATION FAILED");
+                copyBtn.disabled = !isContentValid;
+                downloadBtn.disabled = !isContentValid || !enableDownload;
+            };
 
-function renderObfuscator(){
-  viewRoot.innerHTML = `
-    <div class="card">
-      <h3>Obfuscator</h3>
-      <p class="muted">Paste Lua code and obfuscate it using the API.</p>
-      <div style="height:12px"></div>
-      <textarea id="obf-input" rows="10" placeholder="Paste Lua code...">-- Simple Example
-local health = 100
-function checkHealth(dmg)
-  health = health - dmg
-  if health <= 0 then
-    print('Player died!')
-  end
-end
+            // Download Utility
+            const downloadFile = (filename, content) => {
+                const element = document.createElement('a');
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+                element.setAttribute('download', filename);
+                element.style.display = 'none';
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+            };
 
-checkHealth(50)
-checkHealth(60)</textarea><div style="height:12px"></div>
-  <div style="display:flex;gap:10px"><button class="btn" id="doObf">Obfuscate</button><button class="btn ghost" id="clearObf">Clear</button></div>
-  <div style="height:12px"></div>
-  <textarea id="obf-output" rows="8" readonly class="monos" placeholder="Obfuscated code will appear here..."></textarea>
-</div>
+            // --- Authentication Logic ---
 
-`; document.getElementById('doObf').addEventListener('click', async ()=>{ const src = document.getElementById('obf-input').value; const out = document.getElementById('obf-output'); out.value=''; try{ const r = await fetch(BASE + '/v1/obfuscate/auth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:src})}); if(!r.ok){out.value='-- Error: '+(await r.text());return} const j = await r.json(); out.value = j.obfuscatedCode || ''; }catch(e){out.value='-- Network error'} }); document.getElementById('clearObf').addEventListener('click', ()=>{document.getElementById('obf-input').value='';document.getElementById('obf-output').value='';}); }
+            const updateProfileUI = (isLoggedIn, username = 'User Name', discordId = null, avatarHash = null) => {
+                usernameDisplay.textContent = username;
+                
+                // Clear the current avatar content
+                userAvatar.innerHTML = ''; 
 
-function renderLoader(){ viewRoot.innerHTML = <div class="card"> <h3>Script Loader / Store</h3> <p class="muted">Store obfuscated code and generate loader URLs.</p> <textarea id="store-input" rows="8" placeholder="Paste obfuscated code..."></textarea> <div style="height:12px"></div> <div style="display:flex;gap:10px"><button class="btn" id="doStore">Store Script</button><button class="btn ghost" id="copyLoader">Copy Loader</button></div> <div style="height:12px"></div> <input id="loader-out" class="monos" readonly placeholder="Loader URL will appear here"/> </div>; document.getElementById('doStore').addEventListener('click', async ()=>{ const script = document.getElementById('store-input').value.trim(); if(!script) return alert('Paste obfuscated code'); try{ const r = await fetch(BASE + '/obfuscate-and-store', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({script})}); const j = await r.json(); if(!r.ok) return alert('Store failed: '+(j.error||'unknown')); const key = j.key; const loadURL = ${BASE}/v1/api/auth/${key}; const loader = loadstring(game:HttpGet("${loadURL}"))(); document.getElementById('loader-out').value = loader; navigator.clipboard.writeText(loader); alert('Stored and copied loader.'); }catch(e){alert('Network error storing');} }); document.getElementById('copyLoader').addEventListener('click', ()=>{const v=document.getElementById('loader-out').value; if(!v) return; navigator.clipboard.writeText(v); alert('Copied');}); }
+                if (isLoggedIn) {
+                    const avatarUrl = getDiscordAvatarURL(discordId, avatarHash);
+                    const img = document.createElement('img');
+                    img.src = avatarUrl;
+                    img.alt = `${username}'s Avatar`;
+                    userAvatar.appendChild(img);
 
-function renderMyScripts(){ viewRoot.innerHTML = <div class="card"> <h3>My Scripts</h3> <p class="muted">Your uploaded scripts will appear here.</p> <div class="scripts-list" id="scriptsList"></div> </div>; // demo placeholder const list = document.getElementById('scriptsList'); const demo = [{id:'abc123',name:'Example Script',time:'2025-12-09'}]; demo.forEach(s=>{ const node = document.createElement('div'); node.className='script-item'; node.innerHTML = <div class="meta"><div class="title">${s.name}</div><div class="sub">${s.time} • ${s.id}</div></div><div class="cta"><button class="btn ghost" data-id="${s.id}">View</button><button class="btn" data-id="${s.id}">Load</button></div>; list.appendChild(node); }); }
+                    welcomeMessage.textContent = 'Logged in via Discord';
+                    loginStatus.textContent = `Signed in as ${username}`;
+                    loginStatus.style.color = 'var(--color-success)';
+                    loginBtn.style.display = 'none';
+                    logoutBtn.style.display = 'block';
+                    obfuscateStoreBtn.disabled = false;
+                    
+                } else {
+                    userAvatar.textContent = 'NH';
+                    userAvatar.style.backgroundColor = 'var(--color-brand-red)'; // Reset background
+                    welcomeMessage.textContent = 'Welcome back';
+                    loginStatus.textContent = 'Not signed in';
+                    loginStatus.style.color = 'var(--color-error)';
+                    loginBtn.style.display = 'block';
+                    logoutBtn.style.display = 'none';
+                    obfuscateStoreBtn.disabled = true;
 
-function renderInfo(){ viewRoot.innerHTML = <div class="card"><h3>Info</h3><p class="muted">Enchanted Hub handles obfuscation and secure storage for Lua scripts. Use the tools to obfuscate, store, and generate loaders.</p></div>; } function renderSettings(){ viewRoot.innerHTML = <div class="card"><h3>Settings</h3><p class="muted">Account settings, appearance, and integrations (Discord OAuth planned).</p></div>; }
+                    // Scripts tab message
+                    scriptsTable.style.display = 'none';
+                    scriptsInfo.style.display = 'block';
+                    scriptsInfo.textContent = 'Login to Discord to view and manage your obfuscated scripts.';
+                    scriptCountDisplay.textContent = '0';
+                }
+            };
 
-function renderUpdates(){ viewRoot.innerHTML = <div class="card"> <h3>Update Log</h3> <div class="updates-list"> <div class="update"><div style="display:flex;justify-content:space-between;align-items:center"><h4>v1.4 — Security Expansion</h4><span class="tag">Stable</span></div><p class="small-muted">2025-12-10</p><ul><li>Added Update Log tab and improved UI.</li><li>Prepared backend hooks for Email Verification & Encrypted Script Vault (disabled in main UI for now).</li><li>Improved obfuscation UX and loader security.</li></ul><p class="small-muted">Next (v1.5): Email verification + encrypted vault + optional 2FA.</p></div> <div class="update"><div style="display:flex;justify-content:space-between;align-items:center"><h4>v1.3 — Polished Dashboard</h4><span class="tag">Stable</span></div><p class="small-muted">2025-12-08</p><ul><li>Major UI overhaul and Discord avatar integration.</li></ul></div> </div> </div>; }
 
-// initial stats fetch (demo) async function fetchStats(){ try{ // Example: you can implement a proper endpoint to return stats. document.getElementById('stat-auth').textContent='73.8%'; document.getElementById('stat-disputed').textContent='0.08%'; document.getElementById('stat-scripts').textContent='3'; document.getElementById('mini-auth').textContent='73.8%'; document.getElementById('mini-disputed').textContent='0.08%'; document.getElementById('mini-scripts').textContent='3'; }catch(e){console.warn(e)} } fetchStats();
+            const checkAuthStatus = async () => {
+                try {
+                    const response = await fetch(`${BASE_URL}/api/user/status`, {credentials: 'include'});
+                    const data = await response.json();
 
-// Discord avatar load (owner) (async ()=>{const id='1256872580514709546';try{const r=await fetch(https://discord.com/api/users/${id},{headers:{'X-Super-Properties':''}});const j=await r.json();if(j&&j.avatar) document.querySelector('#owner .pfp img').src=https://cdn.discordapp.com/avatars/${id}/${j.avatar}.png?size=256;else document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png';}catch(e){document.querySelector('#owner .pfp img').src='https://cdn.discordapp.com/embed/avatars/0.png'}})();
+                    isAuthenticated = data.loggedIn;
+                    
+                    if (isAuthenticated) {
+                        currentUsername = data.username;
+                        
+                        updateProfileUI(
+                            true, 
+                            data.username, 
+                            data.discord_id, 
+                            data.avatar
+                        );
+                        
+                        fetchUserScripts(true); 
 
-// Mobile nav toggle document.getElementById('mobileMenu').addEventListener('click', ()=>{document.querySelector('.sidebar').classList.toggle('open')});
+                    } else {
+                        updateProfileUI(false);
+                    }
+                } catch (error) {
+                    console.error('Auth check error:', error);
+                    updateProfileUI(false);
+                }
+            };
 
-// show updates by default when clicking updates nav setActive('home'); </script>
+            const handleLogout = async () => {
+                try {
+                    await fetch(`${BASE_URL}/api/user/logout`, { 
+                        method: 'POST',
+                        credentials: 'include' 
+                    });
+                    checkAuthStatus();
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            };
 
+            // --- Obfuscation & Scripts Logic (Logic remains similar to previous step, 
+            // ensuring credentials: 'include' for all authenticated calls) ---
+
+            const handleObfuscateOnly = async () => {
+                const rawCode = luaInput.value.trim();
+                if (!rawCode) {
+                    displayOutput('Error', 'Please paste Lua code to obfuscate.', false);
+                    return;
+                }
+                
+                obfuscateOnlyBtn.textContent = 'Processing...';
+                obfuscateOnlyBtn.disabled = true;
+                obfuscateStoreBtn.disabled = true;
+
+                displayOutput('Processing...', 'Obfuscating code for download...');
+                
+                try {
+                    const response = await fetch(`${BASE_URL}/v1/obfuscate/auth`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: rawCode })
+                    });
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        displayOutput('Obfuscation Complete!', data.obfuscatedCode, true);
+                        outputCode.title = 'Ready to download';
+                    } else {
+                        displayOutput('Obfuscation Warning/Failure', data.obfuscatedCode, true);
+                        outputCode.title = 'Obfuscation failed, raw code or fallback returned.';
+                    }
+                } catch (error) {
+                    console.error('Obfuscate Error:', error);
+                    displayOutput('Connection Error', `Could not connect to the backend API at ${BASE_URL}.`, false);
+                } finally {
+                    obfuscateOnlyBtn.textContent = 'Obfuscate Only (Download)';
+                    obfuscateOnlyBtn.disabled = false;
+                    if (isAuthenticated) obfuscateStoreBtn.disabled = false;
+                }
+            };
+            
+            const handleObfuscateAndStore = async () => {
+                if (!isAuthenticated) {
+                    alert('You must be logged in with Discord to store scripts.');
+                    return;
+                }
+                
+                const rawCode = luaInput.value.trim();
+                if (!rawCode) {
+                    displayOutput('Error', 'Please paste Lua code to obfuscate and store.', false);
+                    return;
+                }
+                
+                obfuscateStoreBtn.textContent = 'Storing...';
+                obfuscateOnlyBtn.disabled = true;
+                obfuscateStoreBtn.disabled = true;
+
+                displayOutput('Processing...', 'Obfuscating and storing code...');
+                
+                try {
+                    const response = await fetch(`${BASE_URL}/obfuscate-and-store`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script: rawCode }),
+                        credentials: 'include' 
+                    });
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        displayOutput('Storage Successful!', data.key, false);
+                        keyNote.style.display = 'block';
+                        fetchUserScripts(true); 
+                        
+                        outputCode.textContent = data.key;
+                        outputCode.title = 'This is your script access key.';
+                        copyBtn.disabled = false;
+                    } else {
+                        displayOutput('Storage Failed', data.error || 'Server storage failure.', false);
+                    }
+                } catch (error) {
+                    console.error('Store Error:', error);
+                    displayOutput('Connection Error', `Could not connect to the backend API at ${BASE_URL}.`, false);
+                } finally {
+                    obfuscateStoreBtn.textContent = 'Obfuscate & Store (Get Key)';
+                    obfuscateOnlyBtn.disabled = false;
+                    if (isAuthenticated) obfuscateStoreBtn.disabled = false;
+                }
+            };
+
+
+            const fetchUserScripts = async (countOnly = false) => {
+                if (!isAuthenticated) return;
+
+                try {
+                    const response = await fetch(`${BASE_URL}/api/user/scripts`, { credentials: 'include' });
+                    const data = await response.json();
+
+                    if (!data.success) throw new Error(data.error);
+
+                    scriptCountDisplay.textContent = data.scripts.length.toString();
+
+                    if (countOnly) return;
+
+                    if (data.scripts.length > 0) {
+                        scriptsInfo.style.display = 'none';
+                        scriptsTable.style.display = 'table';
+                        renderScriptsTable(data.scripts);
+                    } else {
+                        scriptsTable.style.display = 'none';
+                        scriptsInfo.style.display = 'block';
+                        scriptsInfo.textContent = 'You have not stored any scripts yet. Use the Obfuscator tab to get started!';
+                    }
+
+                } catch (error) {
+                    console.error('Error fetching scripts:', error);
+                    scriptsInfo.style.display = 'block';
+                    scriptsInfo.textContent = `Error fetching scripts. Try logging out and back in.`;
+                    scriptsTable.style.display = 'none';
+                }
+            };
+            
+            const renderScriptsTable = (scripts) => {
+                scriptsTableBody.innerHTML = ''; 
+                
+                scripts.forEach(script => {
+                    const isSuspicious = script.suspicious;
+                    const row = scriptsTableBody.insertRow();
+                    
+                    row.insertCell().textContent = `${script.key.substring(0, 8)}...`;
+                    row.cells[0].title = script.key;
+                    
+                    row.insertCell().textContent = new Date(script.created_at).toLocaleDateString();
+                    
+                    const activityCell = row.insertCell();
+                    const activitySpan = document.createElement('span');
+                    activitySpan.classList.add('suspicious-flag');
+                    
+                    if (script.access_ip_count > 5) {
+                        activitySpan.classList.add('flag-high');
+                    } else if (script.access_ip_count > 2) {
+                        activitySpan.classList.add('flag-medium');
+                    } else {
+                        activitySpan.classList.add('flag-low');
+                    }
+                    activitySpan.textContent = `${isSuspicious ? 'HIGH' : 'LOW'} (${script.access_ip_count} IPs)`;
+                    activityCell.appendChild(activitySpan);
+                    
+                    const actionsCell = row.insertCell();
+                    
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Edit';
+                    editBtn.className = 'btn small primary';
+                    editBtn.style.marginRight = '10px';
+                    editBtn.addEventListener('click', () => openEditModal(script.key));
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.className = 'btn small logout';
+                    deleteBtn.addEventListener('click', () => deleteScript(script.key));
+
+                    actionsCell.appendChild(editBtn);
+                    actionsCell.appendChild(deleteBtn);
+                });
+            };
+
+            const openEditModal = (key) => {
+                modalScriptKey.textContent = key;
+                editLuaInput.value = ''; 
+                editModal.style.display = 'block';
+            };
+
+            const closeEditModal = () => {
+                editModal.style.display = 'none';
+                modalScriptKey.textContent = '';
+                editLuaInput.value = '';
+                saveEditBtn.textContent = 'Save & Re-Obfuscate'; 
+                saveEditBtn.disabled = false;
+            };
+
+            const deleteScript = async (key) => {
+                if (!confirm(`Are you sure you want to DELETE script key ${key.substring(0, 8)}...? This cannot be undone and will permanently remove access.`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${BASE_URL}/api/user/scripts/${key}`, { 
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert(`Script ${key.substring(0, 8)}... successfully deleted.`);
+                        fetchUserScripts(); 
+                    } else {
+                        alert(`Deletion failed: ${data.error}`);
+                    }
+                } catch (error) {
+                    alert('Error deleting script. Check console for details.');
+                    console.error('Delete error:', error);
+                }
+            };
+            
+            const handleSaveEdit = async () => {
+                const key = modalScriptKey.textContent;
+                const newScript = editLuaInput.value.trim();
+
+                if (!newScript) {
+                    alert("Please paste the updated Lua code before saving.");
+                    return;
+                }
+                
+                saveEditBtn.textContent = 'Saving...';
+                saveEditBtn.disabled = true;
+
+                try {
+                    const response = await fetch(`${BASE_URL}/api/user/scripts/${key}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script: newScript }),
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert(`Script ${key.substring(0, 8)}... successfully updated and re-obfuscated!`);
+                        closeEditModal();
+                        fetchUserScripts(); 
+                    } else {
+                        alert(`Update failed: ${data.error || 'Unknown server error.'}`);
+                    }
+                } catch (error) {
+                    alert('Error saving script. Check console for details.');
+                    console.error('Edit error:', error);
+                } finally {
+                    saveEditBtn.textContent = 'Save & Re-Obfuscate';
+                    saveEditBtn.disabled = false;
+                }
+            };
+
+
+            // --- Event Listeners ---
+            
+            // Navigation
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    switchTab(e.currentTarget.getAttribute('data-target'));
+                });
+            });
+
+            // Auth
+            loginBtn.addEventListener('click', () => {
+                window.location.href = DISCORD_LOGIN_URL;
+            });
+            logoutBtn.addEventListener('click', handleLogout);
+
+            // Obfuscator Actions
+            obfuscateOnlyBtn.addEventListener('click', handleObfuscateOnly);
+            obfuscateStoreBtn.addEventListener('click', handleObfuscateAndStore);
+
+            // Output Actions
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(outputCode.textContent).then(() => {
+                    alert('Copied to clipboard!');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                });
+            });
+            downloadBtn.addEventListener('click', () => {
+                downloadFile('obfuscated_script.lua', outputCode.textContent);
+            });
+            
+            // Modal Actions
+            closeModal.addEventListener('click', closeEditModal);
+            window.addEventListener('click', (event) => {
+                if (event.target == editModal) {
+                    closeEditModal();
+                }
+            });
+            saveEditBtn.addEventListener('click', handleSaveEdit);
+
+
+            // --- Initialization ---
+            checkAuthStatus(); 
+            switchTab('dashboard');
+        });
+    </script>
 </body>
 </html>
+
